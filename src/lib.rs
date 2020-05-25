@@ -96,3 +96,40 @@ pub fn default(attr: TokenStream, input: TokenStream) -> TokenStream {
     }
 }
 
+fn parse_args_strings(args: TokenStream) -> Vec<String> {
+    let mut strings = Vec::new();
+    for (i, arg) in args.into_iter().enumerate() {
+	if let proc_macro::TokenTree::Literal(lit) = arg { // is it a literal?
+	    let lit_str = lit.to_string();
+	    if i % 2 == 1 || // is it a _string_ literal?
+	    {
+		let mut chars = lit_str.chars();
+		chars.next().unwrap() != '"' || chars.last().unwrap() != '"'
+	    }{
+		panic!("Unexpected token '{}' (expected string literal)", lit.to_string());
+	    }
+	    strings.push(lit_str.chars() // great, add to list
+			    .skip(1).take(lit_str.len()-2)
+			    .collect::<String>());
+	    continue;
+	} else if let proc_macro::TokenTree::Punct(punct) = arg { // is it punctuation?
+	    if punct.to_string() != "," { // is it a comma? (for list)
+		panic!("Unexpected punctuation {} (expected comma)", punct.to_string());
+	    } else if i % 2 == 0 { // is it in the right place?
+		panic!("Expected list element");
+	    }
+	} else {
+	    panic!("Unexpected token: {}", arg.to_string());
+	}
+    }
+    strings
+}
+
+#[proc_macro]
+pub fn watch_files(args: TokenStream) -> TokenStream {
+    // first, parse the arguement list
+    let file_names = parse_args_strings(args);
+    // Now file_names is populated with Strings. Time to read the files
+    panic!("{:?}", file_names);
+    TokenStream::new()
+}

@@ -1,7 +1,10 @@
 use std::fs::File;
 use std::io::Read;
 
+overrider::watch_files!["src/main.rs", "src/other.rs"];    
+
 fn main() {
+
     // TODO: crawl whole project
     let mut file = File::open("src/main.rs").expect("Unable to open file");
     let mut src = String::new(); 
