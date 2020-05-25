@@ -1,27 +1,15 @@
 #![allow(unused)]
 
-extern crate liboverloader;
-use liboverloader::*;
+extern crate overrider;
+use overrider::*;
 
-struct Flagger {
-    flag: String,
-}
+struct Flagger {}
 
 impl Flagger {
-    pub fn new(flag: String) -> Self {
-	Self{flag}
+    pub fn new() -> Self {
+	Self{}
     }
 }
-
-// Example: Basic method
-/*
-#[override_default]
-impl Flagger {
-    pub fn do_foo(&self) -> &'static str {
-	"overriden method"
-    }
-}
-*/
 
 // Example: Basic function
 // comment out the following definition and output changes
@@ -35,36 +23,25 @@ fn func_foo() -> &'static str {
     "default function"
 }
 
-
-/*
-#[allow(non_snake_case)]
+// Example: Method
+// comment out the following definition and output changes
+#[override_default]
 impl Flagger {
-    pub fn do_foo(&self) -> &'static str {
-	match self.flag {
-	    _ => self.__do_foo_default(),
-	}
+    fn method_foo(&self) -> &'static str {
+	"overriden method"
     }
-}*/
-
-/*
-#[cfg(not(func_overriden = "__Flagger_do_foo_default"))]
-#[inline]
-fn ___do_foo_default(&self) -> &str {
-    "univeral default"
 }
-*/
 
-/*
-// Example: Attribute with input
-#[show_streams(bar)]
-fn invoke2() {}
-// out: attr: "bar"
-// out: item: "fn invoke2() {}"
-*/
+#[default]
+impl Flagger {
+    fn method_foo(&self) -> &'static str {
+	"default method"
+    }
+}
 
 fn main() {
-    //let flagger = Flagger::new("a".to_string());
-    //println!("{}", flagger.do_foo());
+    let flagger = Flagger::new();
+    println!("{}", flagger.method_foo());
 
     println!("{}", func_foo());
 }
