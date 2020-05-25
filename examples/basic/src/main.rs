@@ -13,16 +13,30 @@ impl Flagger {
     }
 }
 
-// Example: Basic function
+// Example: Basic method
+/*
 #[override_default]
 impl Flagger {
-    #[inline]
     pub fn do_foo(&self) -> &'static str {
-	"overriden default"
+	"overriden method"
     }
+}
+*/
+
+// Example: Basic function
+// comment out the following definition and output changes
+#[override_default]
+fn func_foo() -> &'static str {
+    "overriden function"
+}
+
+#[default]
+fn func_foo() -> &'static str {
+    "default function"
 }
 
 
+/*
 #[allow(non_snake_case)]
 impl Flagger {
     pub fn do_foo(&self) -> &'static str {
@@ -30,7 +44,7 @@ impl Flagger {
 	    _ => self.__do_foo_default(),
 	}
     }
-}
+}*/
 
 /*
 #[cfg(not(func_overriden = "__Flagger_do_foo_default"))]
@@ -49,6 +63,8 @@ fn invoke2() {}
 */
 
 fn main() {
-    let flagger = Flagger::new("a".to_string());
-    println!("{}", flagger.do_foo());
+    //let flagger = Flagger::new("a".to_string());
+    //println!("{}", flagger.do_foo());
+
+    println!("{}", func_foo());
 }
