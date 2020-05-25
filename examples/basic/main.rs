@@ -16,6 +16,7 @@ impl Flagger {
 // Example: Basic function
 #[override_default]
 impl Flagger {
+    #[inline]
     pub fn do_foo(&self) -> &'static str {
 	"overriden default"
     }
