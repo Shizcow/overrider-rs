@@ -3,6 +3,6 @@
 members = [
     "overrider",
     "overrider_build",
-    "overrider/examples/hello_world",
-    "overrider/examples/methods",
+    "examples/hello_world",
+    "examples/methods",
 ]
