@@ -1,5 +1,5 @@
 [package]
-name = "hello_world"
+name = "methods"
 version = "0.1.0"
 authors = ["Shizcow <pohl.devin@gmail.com>"]
 edition = "2018"
@@ -9,4 +9,4 @@ build = "build.rs"
 overrider = { path = "../../" }
 
 [build-dependencies]
-overrider_build = { path = "../../overrider-build-rs" }
+overrider_build = { path = "../../../overrider_build" }

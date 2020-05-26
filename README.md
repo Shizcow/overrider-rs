@@ -1,8 +1,10 @@
 # overrider-rs
 
-`overrider` is a Rust crate that provides overloading of functions, methods, and more. For example:
+`overrider` is a set of Rust crates that provide overloading of functions, methods, and more. For example:
 
 ```rust
+// main.rs
+use overrider::*;
 #[default]
 fn foo() {
     println!("Hello World");
@@ -13,6 +15,8 @@ Calling `foo()` will print `Hello World`. However, if an `override_default` vers
 of `foo` is defined:
 
 ```rust
+// main.rs
+use overrider::*;
 #[default]
 fn foo() {
     println!("Hello World");
@@ -28,12 +32,16 @@ Calling `foo()` will now print `Hello Za Warudo`. The first function definition 
 
 
 ## Using
-Due to limitations in `proc_macro`, `overrider` requires use of it's sister crate [`overrider-build`](https://github.com/Shizcow/overrider-build-rs)
-in a build script. However, it's pretty easy to use:
+Due to limitations in `proc_macro`, `overrider` requires the use of two crates:
+- `overrider` for code in `src`
+- `overrider_build` for a build script such as `build.rs`
+The code from above shows how to use the `overrider` crate.
+Below is how to use the build portion:
 ```rust
-fn main() { // build.rs
-    overrider_build::watch_files!("src/main.rs");
+// build.rs
+use overrider_build::watch_files;
+fn main() {
+    watch_files!("src/main.rs");
 }
 
 ```
-
