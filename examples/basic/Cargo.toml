@@ -11,6 +11,4 @@ build = "build.rs"
 overrider = { path = "../../" }
 
 [build-dependencies]
-syn = {version = "1.0.23", features = ["full", "extra-traits"]}
-quote = "1.0.6"
-overrider = { path = "../../" }
+overrider_build = { path = "../../../overrider_build" }

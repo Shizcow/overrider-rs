@@ -1,15 +1,4 @@
-#![allow(unused)]
-
-extern crate overrider;
 use overrider::*;
-
-struct Flagger {}
-
-impl Flagger {
-    pub fn new() -> Self {
-	Self{}
-    }
-}
 
 // Example: Basic function
 // comment out the following definition and output changes
@@ -23,25 +12,27 @@ fn func_foo() -> &'static str {
     "default function"
 }
 
+struct Dummy {}
+
 // Example: Method
 // comment out the following definition and output changes
 #[override_default]
-impl Flagger {
+impl Dummy {
     fn method_foo(&self) -> &'static str {
 	"overriden method"
     }
 }
 
 #[default]
-impl Flagger {
+impl Dummy {
     fn method_foo(&self) -> &'static str {
 	"default method"
     }
 }
 
 fn main() {
-    let flagger = Flagger::new();
-    println!("{}", flagger.method_foo());
+    let dummy = Dummy{};
+    println!("{}", dummy.method_foo());
 
     println!("{}", func_foo());
 }
