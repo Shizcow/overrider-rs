@@ -11,4 +11,4 @@ build = "build.rs"
 overrider = { path = "../../" }
 
 [build-dependencies]
-overrider_build = { path = "../../../overrider_build" }
+overrider_build = { path = "../../overrider-build-rs" }
