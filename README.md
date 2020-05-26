@@ -2,4 +2,8 @@
 
 `overrider` is a Rust crate that provides function overloading
 
-`Redcarpet.new("Hello World!")`{:.rs}
+```ruby
+require 'redcarpet'
+markdown = Redcarpet.new("Hello World!")
+puts markdown.to_html
+```
