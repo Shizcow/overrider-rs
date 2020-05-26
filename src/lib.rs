@@ -9,6 +9,19 @@ pub fn override_default(attr: TokenStream, input: TokenStream) -> TokenStream {
     input // overrider_build (build.rs) will take care of this
 }
 
+#[proc_macro_attribute]
+pub fn default(attr: TokenStream, input: TokenStream) -> TokenStream {
+    syn::parse_macro_input!(attr as Nothing); // I take no args
+
+    if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
+	default_impl(item)
+    } else if let Ok(item) = syn::parse::<ItemFn>(input) {
+	default_function(item)
+    } else {
+	panic!("I can't parse this yet");
+    }
+}
+
 fn default_function(mut input: ItemFn) -> TokenStream {
     let override_flag = Ident::new(&format!("__override_func_{}", &input.sig.ident), Span::call_site());
     
@@ -53,17 +66,4 @@ fn default_impl(mut input: ItemImpl) -> TokenStream { // impls need to look at e
     TokenStream::from(quote! {
 	#input
     })
-}
-
-#[proc_macro_attribute]
-pub fn default(attr: TokenStream, input: TokenStream) -> TokenStream {
-    syn::parse_macro_input!(attr as Nothing); // I take no args
-
-    if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
-	default_impl(item)
-    } else if let Ok(item) = syn::parse::<ItemFn>(input) {
-	default_function(item)
-    } else {
-	panic!("I can't parse this yet");
-    }
 }
