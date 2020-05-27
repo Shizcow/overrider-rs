@@ -6,4 +6,5 @@ members = [
     "examples/hello_world",
     "examples/methods",
     "examples/priorities",
+    "examples/finals",
 ]

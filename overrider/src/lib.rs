@@ -3,6 +3,27 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 
+#[proc_macro_attribute] // TODO: use final and override literally (escape keyword)
+pub fn finals(attr: TokenStream, input: TokenStream)-> TokenStream {
+    syn::parse_macro_input!(attr as Nothing); // I take no args
+    if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
+	panic!("Can't finalize impl yet");
+    } else if let Ok(item) = syn::parse::<ItemFn>(input) {
+	let priority_lesser = 
+	    std::env::var(format!("__override_final_func_{}", &item.sig.ident.to_string()))
+	    .expect("Failed covering final. \
+		     Did you configure your build script to watch this file?");
+	return syn::Error::new(
+	    item.sig.ident.span(),
+	    format!("Function requested final. \
+		     Replace #[final] with #[override(priority = {})] to make top level.",
+		    priority_lesser)
+	).to_compile_error().into();
+    } else {
+	panic!("I can't finalize this yet")
+    }
+}
+
 #[proc_macro_attribute] // shorthand for #[override_default(priority = 0)]
 pub fn default(attr: TokenStream, input: TokenStream) -> TokenStream {
     syn::parse_macro_input!(attr as Nothing); // I take no args
@@ -21,7 +42,7 @@ pub fn override_default(attr: TokenStream, input: TokenStream) -> TokenStream {
 			if let Ok(i) = lit.base10_parse::<i32>() {
 			    i
 			} else {
-			    panic!("Could not parse literal");
+			    panic!("Could not parse literal"); // TODO: use std::compiler_error
 			}
 		    } else {
 			panic!("Expected integer literal");

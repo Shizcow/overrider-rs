@@ -20,3 +20,4 @@ fn main() {
 fn main() {
     println!("Overriden with a higher priority");
 }
+
