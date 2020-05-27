@@ -1,8 +1,10 @@
 [workspace]
 
 members = [
+    "core",
     "overrider",
     "overrider_build",
     "examples/hello_world",
     "examples/methods",
+    "examples/priorities",
 ]

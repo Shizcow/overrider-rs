@@ -1,13 +1,10 @@
 [package]
-name = "overrider"
-version = "0.2.0"
+name = "core"
+version = "0.1.0"
 authors = ["Shizcow <pohl.devin@gmail.com>"]
 edition = "2018"
 
-[dependencies]
-proc-macro2 = "1.0.17"
-syn = {version = "1.0.23", features = ["full", "extra-traits"]}
-quote = "1.0.6"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-proc-macro = true
+[dependencies]
+syn = {version = "1.0.23", features = ["full", "extra-traits"]}

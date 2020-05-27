@@ -3,27 +3,56 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 
-#[proc_macro_attribute]
-pub fn override_default(attr: TokenStream, input: TokenStream) -> TokenStream {
+#[proc_macro_attribute] // shorthand for #[override_default(priority = 0)]
+pub fn default(attr: TokenStream, input: TokenStream) -> TokenStream {
     syn::parse_macro_input!(attr as Nothing); // I take no args
-    input // overrider_build (build.rs) will take care of this
+    attach(input, 0)
 }
 
 #[proc_macro_attribute]
-pub fn default(attr: TokenStream, input: TokenStream) -> TokenStream {
-    syn::parse_macro_input!(attr as Nothing); // I take no args
+pub fn override_default(attr: TokenStream, input: TokenStream) -> TokenStream {
+    let priority = {
+	if let Ok(_) = syn::parse::<Nothing>(attr.clone()) {
+	    1
+	} else if let Ok(syn::Expr::Assign(assign)) = syn::parse::<syn::Expr>(attr.clone()) {
+	    if let (syn::Expr::Path(left), syn::Expr::Lit(right)) = (*assign.left, *assign.right) {
+		if left.path.segments[0].ident.to_string() == "priority" {
+		    if let syn::Lit::Int(lit) = right.lit {
+			if let Ok(i) = lit.base10_parse::<i32>() {
+			    i
+			} else {
+			    panic!("Could not parse literal");
+			}
+		    } else {
+			panic!("Expected integer literal");
+		    }
+		} else {
+		    panic!("Unexpected arguement name");
+		}
+	    } else {
+		panic!("Incorrect arguement format / expected positive integer");
+	    }
+	} else {
+	    panic!("Unexpected arguement {}", attr.to_string());
+	}
+    };
 
+    attach(input, priority)
+}
+
+fn attach(input: TokenStream, priority: i32) -> TokenStream { // TODO: do this with traits
     if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
-	default_impl(item)
+	attach_impl(item, priority)
     } else if let Ok(item) = syn::parse::<ItemFn>(input) {
-	default_function(item)
+	attach_function(item, priority)
     } else {
-	panic!("I can't parse this yet");
+	panic!("I can't parse this yet")
     }
 }
 
-fn default_function(mut input: ItemFn) -> TokenStream {
-    let override_flag = Ident::new(&format!("__override_func_{}", &input.sig.ident), Span::call_site());
+
+fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
+    let override_flag = Ident::new(&format!("__override_priority_{}_func_{}", priority, &input.sig.ident), Span::call_site());
     
     input.attrs.push(
 	syn::parse2::<DeriveInput>(
@@ -37,7 +66,7 @@ fn default_function(mut input: ItemFn) -> TokenStream {
     })
 }
 
-fn default_impl(mut input: ItemImpl) -> TokenStream { // impls need to look at each method
+fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
     // First, grab the struct name
     let self_type = match input.self_ty.as_ref() {
 	Path(path) => path,
@@ -49,7 +78,8 @@ fn default_impl(mut input: ItemImpl) -> TokenStream { // impls need to look at e
 	match item {
 	    Method(method) => {
 		let override_flag = Ident::new(
-		    &format!("__override_method_{}_{}",
+		    &format!("__override_priority_{}_method_{}_{}",
+			     priority,
 			     self_type,
 			     &method.sig.ident), Span::call_site());
 		method.attrs.push(
