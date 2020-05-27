@@ -2,6 +2,55 @@ use syn::{Type::Path, ImplItem::Method};
 use std::fs::File;
 use std::io::Read;
 
+pub fn get_priority(attrs: &Vec<syn::Attribute>) -> Option<i32> {
+    for attr in attrs {
+	if attr.path.segments[0].ident.to_string() == "override_default" {
+	    if let Ok(syn::Expr::Paren(expr)) = syn::parse2::<syn::Expr>(attr.tokens.clone()) {
+		if let syn::Expr::Assign(assign) = *expr.expr {
+		    if let syn::Expr::Path(left) = *assign.left {
+			if left.path.segments.len() == 1
+			    && left.path.segments[0].ident.to_string() == "priority" {
+				if let syn::Expr::Lit(lit) = *assign.right {
+				    if let syn::Lit::Int(i) = lit.lit {
+					if let Ok(priority) = i.base10_parse::<i32>() {
+					    return Some(priority);
+					} else {
+					    panic!("Invalid positive integer rvalue in macro invocation");
+					}
+				    } else {
+					panic!("Expected integer rvalue in macro invocation");
+				    }
+				} else {
+				    panic!("Expected rvalue literal in macro invocation");
+				}
+			    } else {
+				panic!("Invalid lvalue in macro invocation");
+			    }
+		    } else {
+			panic!("Unparsable lvalue in macro invocation");
+		    }
+		} else {
+		    panic!("Invalid expression in macro invocation");
+		}
+	    } else { // might be default
+		if attr.tokens.is_empty() {
+		    return Some(1);
+		} else {
+		    panic!("Invalid macro invocation");
+		}
+	    }
+	} else if attr.path.segments[0].ident.to_string() == "default" {
+	    if attr.tokens.is_empty() {
+		return Some(0);
+	    } else {
+		panic!("Unexpected arguement in macro invocation");
+	    }
+	}
+    }
+    None
+}
+
+
 #[derive(Debug)]
 struct Override { // TODO: more debug info
     pub flag: String,
@@ -20,7 +69,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 	for item in syn::parse_file(&src).expect(&format!("Unable to parse file '{}'", file_name)).items {
 	    match item { // step over everything in the file
 		syn::Item::Fn(func) => {
-		    if let Some(priority) = core::get_priority(&func.attrs) {
+		    if let Some(priority) = get_priority(&func.attrs) {
 			overrides.push(Override{
 			    flag: format!("func_{}",
 					  func.sig.ident.to_string()),
@@ -29,7 +78,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 		    }
 		},
 		syn::Item::Impl(impl_block) => {
-		    if let Some(priority) = core::get_priority(&impl_block.attrs) {
+		    if let Some(priority) = get_priority(&impl_block.attrs) {
 			let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
 			    Path(path) => path,
 			    _ => panic!("Could not get Path for impl (should never see this)"),

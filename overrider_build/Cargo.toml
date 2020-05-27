@@ -8,5 +8,3 @@ edition = "2018"
 
 [dependencies]
 syn = {version = "1.0.23", features = ["full", "extra-traits"]}
-quote = "1.0.6" # TODO: what actually needs quote?
-core = { path = "../core" }
