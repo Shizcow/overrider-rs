@@ -3,11 +3,41 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 
-#[proc_macro_attribute] // TODO: use final and override literally (escape keyword)
-pub fn finals(attr: TokenStream, input: TokenStream)-> TokenStream {
+#[proc_macro_attribute]
+pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
     syn::parse_macro_input!(attr as Nothing); // I take no args
-    if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
-	panic!("Can't finalize impl yet");
+    if let Ok(impl_block) = syn::parse::<ItemImpl>(input.clone()) {
+	let self_type = match impl_block.self_ty.as_ref() {
+	    Path(path) => path,
+	    _ => panic!("Could not get Path for impl (should never see this)"),
+	}.path.segments[0].ident.to_string();
+	match impl_block.items.into_iter().fold(None, |acc, item|
+	    match item {
+		Method(method) => {
+		    let priority_lesser = 
+			std::env::var(format!("__override_final_method_{}_{}", self_type, &method.sig.ident.to_string()))
+			.expect("Failed covering final. \
+				 Did you configure your build script to watch this file?");
+		    let new_error = syn::Error::new(
+			method.sig.ident.span(),
+			format!("Method requested final. \
+				 Replace #[override_final] with #[override(priority = {})] \
+				 on a (seperate if required) impl block to make top level.",
+				priority_lesser));
+		    match acc {
+			None => Some(new_error),
+			Some(mut errors) => {
+			    errors.combine(new_error);
+			    Some(errors)
+			},
+		    }
+		},
+		_ => panic!("I can't finalize anything other than methods in an impl block yet"),
+	    }
+	) {
+	    Some(errors) => errors.to_compile_error().into(),
+	    None => input, // this will only happen if user tries to finalize an empty impl block
+	}
     } else if let Ok(item) = syn::parse::<ItemFn>(input) {
 	let priority_lesser = 
 	    std::env::var(format!("__override_final_func_{}", &item.sig.ident.to_string()))
@@ -16,7 +46,7 @@ pub fn finals(attr: TokenStream, input: TokenStream)-> TokenStream {
 	return syn::Error::new(
 	    item.sig.ident.span(),
 	    format!("Function requested final. \
-		     Replace #[final] with #[override(priority = {})] to make top level.",
+		     Replace #[override_final] with #[override(priority = {})] to make top level.",
 		    priority_lesser)
 	).to_compile_error().into();
     } else {

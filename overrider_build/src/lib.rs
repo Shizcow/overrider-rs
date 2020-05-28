@@ -47,7 +47,7 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Result<i32, Status> {
 	    } else {
 		panic!("Unexpected arguement in macro invocation");
 	    }
-	} else if attr.path.segments[0].ident.to_string() == "finals" {
+	} else if attr.path.segments[0].ident.to_string() == "override_final" {
 	    if attr.tokens.is_empty() {
 		return Err(Final);
 	    } else {
@@ -81,12 +81,10 @@ pub fn watch_files(file_names: Vec<&str>) {
 		    match get_priority(&func.attrs) {
 			Ok(priority) =>
 			    overrides.push(Override{
-				flag: format!("func_{}",
-					      func.sig.ident.to_string()),
+				flag: format!("func_{}",func.sig.ident),
 				priority,
 			    }),
-			Err(Final) => finals.push(format!("func_{}",
-							  func.sig.ident.to_string())),
+			Err(Final) => finals.push(format!("func_{}", func.sig.ident)),
 			Err(Empty) => {},
 		    }
 		},
@@ -112,7 +110,20 @@ pub fn watch_files(file_names: Vec<&str>) {
 			    }
 			},
 			Err(Final) => {
-			    panic!("Can't finalize methods yet");
+			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
+				Path(path) => path,
+				_ => panic!("Could not get Path for impl (should never see this)"),
+			    }.path.segments[0].ident.to_string();
+			    
+			    for item in impl_block.items {
+				match item {
+				    Method(method) => 
+					finals.push(format!("method_{}_{}",
+							    self_type,
+							    &method.sig.ident)),
+				    _ => panic!("I can't finalize anything other than methods in an impl block yet"),
+				}
+			    }
 			},
 			Err(Empty) => {},
 		    }
