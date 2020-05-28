@@ -93,36 +93,29 @@ pub fn watch_files(file_names: Vec<&str>) {
 		syn::Item::Impl(impl_block) => {
 		    match get_priority(&impl_block.attrs) {
 			Ok(priority) => {
+			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
+				Path(path) => path,
+				_ => panic!("Could not get Path for impl (should never see this)"),
+			    }.path.segments[0].ident.to_string();
 			    
+			    for item in impl_block.items {
+				match item {
+				    Method(method) =>
+					overrides.push(Override{
+					    flag: format!("method_{}_{}",
+							  self_type,
+							  &method.sig.ident),
+					    priority,
+					}),
+				    _ => panic!("I can't overload anything other than methods in an impl block yet"),
+				}
+			    }
 			},
 			Err(Final) => {
-			    
+			    panic!("Can't finalize methods yet");
 			},
-			Err(Empty) => {
-			    
-			}
+			Err(Empty) => {},
 		    }
-		    /*
-		    if let Some(priority) = get_priority(&impl_block.attrs) {
-			let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
-			    Path(path) => path,
-			    _ => panic!("Could not get Path for impl (should never see this)"),
-			}.path.segments[0].ident.to_string();
-			
-			for item in impl_block.items {
-			    match item {
-				Method(method) =>
-				    overrides.push(Override{
-					flag: format!("method_{}_{}",
-						      self_type,
-						      &method.sig.ident),
-					priority,
-				    }),
-				_ => panic!("I can't overload anything other than methods in an impl block yet"),
-			    }
-			}
-		    }
-		     */
 		},
 		_ => {} // can't parse everything yet
 	    }
