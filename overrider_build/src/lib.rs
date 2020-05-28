@@ -5,7 +5,7 @@ use std::io::Read;
 enum Status {Final, Empty}
 use Status::*;
 fn get_priority(attrs: &Vec<syn::Attribute>) -> Result<i32, Status> {
-    for attr in attrs {
+    for attr in attrs { // there's no error checking; overrider main can give richer error messages
 	if attr.path.segments[0].ident.to_string() == "override_default" {
 	    if let Ok(syn::Expr::Paren(expr)) = syn::parse2::<syn::Expr>(attr.tokens.clone()) {
 		if let syn::Expr::Assign(assign) = *expr.expr {
@@ -16,42 +16,24 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Result<i32, Status> {
 				    if let syn::Lit::Int(i) = lit.lit {
 					if let Ok(priority) = i.base10_parse::<i32>() {
 					    return Ok(priority);
-					} else {
-					    panic!("Invalid positive integer rvalue in macro invocation");
 					}
-				    } else {
-					panic!("Expected integer rvalue in macro invocation");
 				    }
-				} else {
-				    panic!("Expected rvalue literal in macro invocation");
 				}
-			    } else {
-				panic!("Invalid lvalue in macro invocation");
 			    }
-		    } else {
-			panic!("Unparsable lvalue in macro invocation");
 		    }
-		} else {
-		    panic!("Invalid expression in macro invocation");
 		}
 	    } else { // might be default
 		if attr.tokens.is_empty() {
 		    return Ok(1);
-		} else {
-		    panic!("Invalid macro invocation");
 		}
 	    }
 	} else if attr.path.segments[0].ident.to_string() == "default" {
 	    if attr.tokens.is_empty() {
 		return Ok(0);
-	    } else {
-		panic!("Unexpected arguement in macro invocation");
 	    }
 	} else if attr.path.segments[0].ident.to_string() == "override_final" {
 	    if attr.tokens.is_empty() {
 		return Err(Final);
-	    } else {
-		panic!("Unexpected arguement in macro invocation");
 	    }
 	}
     }

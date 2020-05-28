@@ -1,4 +1,4 @@
-use syn::{parse::Nothing, ImplItem::{Method, Const}, Type::Path, ItemFn, ItemImpl,
+use syn::{parse::Nothing, spanned::Spanned, ImplItem::{Method, Const}, Type::Path, ItemFn, ItemImpl,
 	  DeriveInput, Ident, Attribute};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
@@ -10,51 +10,45 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
     if let Ok(impl_block) = syn::parse::<ItemImpl>(input.clone()) {
 	let self_type = match impl_block.self_ty.as_ref() {
 	    Path(path) => path,
-	    _ => panic!("Could not get Path for impl (should never see this)"),
+	    _ => return quick_error(format!("Could not get Path for impl (should never see this)")),
 	}.path.segments[0].ident.to_string();
-	match impl_block.items.into_iter().fold(None, |acc, item|
-	    match item {
+	match impl_block.items.into_iter().fold(None, |acc, item| {
+	    let new_error = match item {
 		Method(method) => {
 		    let priority_lesser = 
 			std::env::var(format!("__override_final_method_{}_{}", self_type, &method.sig.ident.to_string()))
 			.expect("Failed covering final. \
 				 Did you configure your build script to watch this file?");
-		    let new_error = syn::Error::new(
+		    syn::Error::new(
 			method.sig.ident.span(),
 			format!("Method requested final. \
 				 Replace #[override_final] with #[override(priority = {})] \
 				 on a (seperate if required) impl block to make top level.",
-				priority_lesser));
-		    match acc {
-			None => Some(new_error),
-			Some(mut errors) => {
-			    errors.combine(new_error);
-			    Some(errors)
-			},
-		    }
+				priority_lesser))
 		},
 		Const(constant) => {
 		    let priority_lesser = 
 			std::env::var(format!("__override_final_implconst_{}_{}", self_type, &constant.ident.to_string()))
 			.expect("Failed covering final. \
 				 Did you configure your build script to watch this file?");
-		    let new_error = syn::Error::new(
+		    syn::Error::new(
 			constant.ident.span(),
 			format!("Impl constant requested final. \
 				 Replace #[override_final] with #[override(priority = {})] \
 				 on a (seperate if required) impl block to make top level.",
-				priority_lesser));
-		    match acc {
-			None => Some(new_error),
-			Some(mut errors) => {
-			    errors.combine(new_error);
-			    Some(errors)
-			},
-		    }
+				priority_lesser))
 		}
-		_ => panic!("I can't finalize anything other than methods in an impl block yet"),
+		item => syn::Error::new(item.span(),
+					format!("I can't finalize this yet")),
+	    };
+	    match acc {
+		None => Some(new_error),
+		Some(mut errors) => {
+		    errors.combine(new_error);
+		    Some(errors)
+		},
 	    }
-	) {
+	}) {
 	    Some(errors) => errors.to_compile_error().into(),
 	    None => input, // this will only happen if user tries to finalize an empty impl block
 	}
@@ -70,7 +64,7 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 		    priority_lesser)
 	).to_compile_error().into();
     } else {
-	panic!("I can't finalize this yet")
+	quick_error(format!("I can't finalize whatever this is attached to yet"))
     }
 }
 
@@ -92,23 +86,30 @@ pub fn override_default(attr: TokenStream, input: TokenStream) -> TokenStream {
 			if let Ok(i) = lit.base10_parse::<i32>() {
 			    i
 			} else {
-			    panic!("Could not parse literal"); // TODO: use std::compiler_error
-			}
+			    return quick_error(format!("Could not parse literal"));
+			}                                     
 		    } else {
-			panic!("Expected integer literal");
+			return quick_error(format!("Expected integer literal"));
 		    }
 		} else {
-		    panic!("Unexpected arguement name");
+		    return quick_error(format!("Unexpected arguement name"));
 		}
 	    } else {
-		panic!("Incorrect arguement format / expected positive integer");
+		return quick_error(format!("Incorrect arguement format / expected positive integer"));
 	    }
 	} else {
-	    panic!("Unexpected arguement {}", attr.to_string());
+	    return quick_error(format!("Unexpected arguement {} (expected priority)", attr.to_string()));
 	}
     };
 
     attach(input, priority)
+}
+
+fn quick_error(message: String) -> TokenStream {
+    syn::Error::new(
+	Span::call_site(),
+	message
+    ).to_compile_error().into()
 }
 
 fn attach(input: TokenStream, priority: i32) -> TokenStream { // TODO: do this with traits
@@ -117,7 +118,7 @@ fn attach(input: TokenStream, priority: i32) -> TokenStream { // TODO: do this w
     } else if let Ok(item) = syn::parse::<ItemFn>(input) {
 	attach_function(item, priority)
     } else {
-	panic!("I can't parse this yet")
+	quick_error(format!("I can't parse this yet"))
     }
 }
 
@@ -134,7 +135,10 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
     // First, grab the struct name
     let self_type = match input.self_ty.as_ref() {
 	Path(path) => path,
-	_ => panic!("Could not get Path for impl (should never see this)"),
+	item => return syn::Error::new(
+		item.span(),
+		format!("Could not get Path for impl (should never see this)"))
+	    .to_compile_error().into(),
     }.path.segments[0].ident.to_string();
 
     // then step over each method, appending override flag to each
@@ -144,13 +148,16 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
 		attr_flag(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
 			     priority,
 			     self_type,
-			     &method.sig.ident)),
+						     &method.sig.ident)),
 	    Const(constant) =>
 		attr_flag(&mut constant.attrs, format!("__override_priority_{}_implconst_{}_{}",
-			     priority,
-			     self_type,
-			     &constant.ident)),
-	    _ => panic!("I can't overload anything other than methods in an impl block yet"),
+						       priority,
+						       self_type,
+						       &constant.ident)),
+	    item => return syn::Error::new(
+		item.span(),
+		format!("I can't overload anything other than methods in an impl block yet"))
+		.to_compile_error().into(),
 	}
     }
     TokenStream::from(quote! {
