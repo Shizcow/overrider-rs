@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-overrider = { path = "../../overrider" }
+overrider = "~0.3"
 
 [build-dependencies]
-overrider_build = { path = "../../overrider_build" }
+overrider_build = "~0.3"

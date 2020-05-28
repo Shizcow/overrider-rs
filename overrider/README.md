@@ -33,8 +33,8 @@ Calling `foo()` will now print `Hello Za Warudo`. The first function definition 
 
 ## Using
 Due to limitations in `proc_macro`, `overrider` requires the use of two crates:
-- `overrider` for code in `src`
-- `overrider_build` for a build script such as `build.rs`
+- [`overrider`](https://crates.io/crates/overrider) for code in `src`
+- [`overrider_build`](https://crates.io/crates/overrider_build) for a build script such as `build.rs`
 The code from above shows how to use the `overrider` crate.
 Below is how to use the build portion:
 ```rust
