@@ -21,10 +21,22 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 				 Did you configure your build script to watch this file?");
 		    syn::Error::new(
 			method.sig.ident.span(),
-			format!("Method requested final. \
-				 Replace #[override_final] with #[override(priority = {})] \
+			match priority_lesser.as_str() {
+			    "0" => 
+				format!("Method requested final. \
+				 Replace #[override_final] with #[default] \
+				 on a (seperate if required) impl block to make top level."),
+			    "1" => 
+				format!("Method requested final. \
+				 Replace #[override_final] with #[override_default] \
+				 on a (seperate if required) impl block to make top level."),
+			    priority_lesser => 
+				format!("Method requested final. \
+				 Replace #[override_final] with #[override_default(priority = {})] \
 				 on a (seperate if required) impl block to make top level.",
-				priority_lesser))
+					priority_lesser),
+			}
+		    )
 		},
 		Const(constant) => {
 		    let priority_lesser = 
@@ -33,10 +45,22 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 				 Did you configure your build script to watch this file?");
 		    syn::Error::new(
 			constant.ident.span(),
-			format!("Impl constant requested final. \
-				 Replace #[override_final] with #[override(priority = {})] \
-				 on a (seperate if required) impl block to make top level.",
-				priority_lesser))
+			match priority_lesser.as_str() {
+			    "0" => 
+				format!("Impl constant requested final. \
+					 Replace #[override_final] with #[default] \
+					 on a (seperate if required) impl block to make top level."),
+			    "1" => 
+				format!("Impl constant requested final. \
+					 Replace #[override_final] with #[override_default] \
+					 on a (seperate if required) impl block to make top level."),
+			    priority_lesser => 
+				format!("Impl constant requested final. \
+					 Replace #[override_final] with #[override_default(priority = {})] \
+					 on a (seperate if required) impl block to make top level.",
+					priority_lesser),
+			}
+		    )
 		}
 		item => syn::Error::new(item.span(),
 					format!("I can't finalize this yet")),
@@ -59,9 +83,18 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 		     Did you configure your build script to watch this file?");
 	return syn::Error::new(
 	    item.sig.ident.span(),
-	    format!("Function requested final. \
-		     Replace #[override_final] with #[override(priority = {})] to make top level.",
-		    priority_lesser)
+	    match priority_lesser.as_str() {
+		"0" => 
+		    format!("Function requested final. \
+			     Replace #[override_final] with #[default] to make top level."),
+		"1" => 
+		    format!("Function requested final. \
+			     Replace #[override_final] with #[override_default] to make top level."),
+		priority_lesser => 
+		    format!("Function requested final. \
+			     Replace #[override_final] with #[override_default(priority = {})] to make top level.",
+			    priority_lesser),
+	    }
 	).to_compile_error().into();
     } else {
 	quick_error(format!("I can't finalize whatever this is attached to yet"))
