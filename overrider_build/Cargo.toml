@@ -3,6 +3,12 @@ name = "overrider_build"
 version = "0.3.1"
 authors = ["Shizcow <pohl.devin@gmail.com>"]
 edition = "2018"
+license = "GPL-2.0+"
+description = "The build dependency to overrider"
+readme = "README.md"
+repository = "https://github.com/Shizcow/overrider-rs"
+keywords = ["override", "proc_macro", "overload", "final"]
+categories = ["development-tools"]
 
 [dependencies]
 syn = {version = "1.0.23", features = ["full", "extra-traits"]}
