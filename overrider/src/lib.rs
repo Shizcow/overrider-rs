@@ -1,4 +1,5 @@
-use syn::{parse::Nothing, ImplItem::{Method, Const}, Type::Path, ItemFn, ItemImpl, DeriveInput, Ident};
+use syn::{parse::Nothing, ImplItem::{Method, Const}, Type::Path, ItemFn, ItemImpl,
+	  DeriveInput, Ident, Attribute};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
@@ -120,17 +121,10 @@ fn attach(input: TokenStream, priority: i32) -> TokenStream { // TODO: do this w
     }
 }
 
-
 fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
-    let override_flag = Ident::new(&format!("__override_priority_{}_func_{}", priority, &input.sig.ident), Span::call_site());
+    attr_flag(&mut input.attrs,
+	      format!("__override_priority_{}_func_{}", priority, &input.sig.ident));
     
-    input.attrs.push(
-	syn::parse2::<DeriveInput>(
-	    quote! {
-		#[cfg(not(#override_flag))]
-		struct Dummy;
-	    }
-	).unwrap().attrs.swap_remove(0));
     TokenStream::from(quote! {
 	#input
     })
@@ -146,38 +140,31 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
     // then step over each method, appending override flag to each
     for item in &mut input.items {
 	match item {
-	    Method(method) => {
-		let override_flag = Ident::new(
-		    &format!("__override_priority_{}_method_{}_{}",
+	    Method(method) =>
+		attr_flag(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
 			     priority,
 			     self_type,
-			     &method.sig.ident), Span::call_site());
-		method.attrs.push(
-		    syn::parse2::<DeriveInput>(
-			quote! {
-			    #[cfg(not(#override_flag))]
-			    struct Dummy;
-			}
-		    ).unwrap().attrs.swap_remove(0));
-	    },
-	    Const(constant) => {
-		let override_flag = Ident::new(
-		    &format!("__override_priority_{}_implconst_{}_{}",
+			     &method.sig.ident)),
+	    Const(constant) =>
+		attr_flag(&mut constant.attrs, format!("__override_priority_{}_implconst_{}_{}",
 			     priority,
 			     self_type,
-			     &constant.ident), Span::call_site());
-		constant.attrs.push(
-		    syn::parse2::<DeriveInput>(
-			quote! {
-			    #[cfg(not(#override_flag))]
-			    struct Dummy;
-			}
-		    ).unwrap().attrs.swap_remove(0));
-	    }
+			     &constant.ident)),
 	    _ => panic!("I can't overload anything other than methods in an impl block yet"),
 	}
     }
     TokenStream::from(quote! {
 	#input
     })
+}
+
+fn attr_flag(attrs: &mut Vec<Attribute>, flag: String) {
+    let override_flag = Ident::new(&flag, Span::call_site());
+    attrs.push(
+	syn::parse2::<DeriveInput>(
+	    quote! {
+		#[cfg(not(#override_flag))]
+		struct Dummy;
+	    }
+	).unwrap().attrs.swap_remove(0));
 }
