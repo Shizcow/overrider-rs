@@ -24,16 +24,16 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 			match priority_lesser.as_str() {
 			    "0" => 
 				format!("Method requested final. \
-				 Replace #[override_final] with #[default] \
+				 Replace #[override_final] with #[default] or higher \
 				 on a (seperate if required) impl block to make top level."),
 			    "1" => 
 				format!("Method requested final. \
-				 Replace #[override_final] with #[override_default] \
+				 Replace #[override_final] with #[override_default] or higher  \
 				 on a (seperate if required) impl block to make top level."),
 			    priority_lesser => 
 				format!("Method requested final. \
 				 Replace #[override_final] with #[override_default(priority = {})] \
-				 on a (seperate if required) impl block to make top level.",
+				  or higher on a (seperate if required) impl block to make top level.",
 					priority_lesser),
 			}
 		    )
@@ -48,16 +48,16 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 			match priority_lesser.as_str() {
 			    "0" => 
 				format!("Impl constant requested final. \
-					 Replace #[override_final] with #[default] \
+					 Replace #[override_final] with #[default] or higher  \
 					 on a (seperate if required) impl block to make top level."),
 			    "1" => 
 				format!("Impl constant requested final. \
-					 Replace #[override_final] with #[override_default] \
+					 Replace #[override_final] with #[override_default] or higher  \
 					 on a (seperate if required) impl block to make top level."),
 			    priority_lesser => 
 				format!("Impl constant requested final. \
 					 Replace #[override_final] with #[override_default(priority = {})] \
-					 on a (seperate if required) impl block to make top level.",
+					  or higher on a (seperate if required) impl block to make top level.",
 					priority_lesser),
 			}
 		    )
@@ -86,13 +86,15 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 	    match priority_lesser.as_str() {
 		"0" => 
 		    format!("Function requested final. \
-			     Replace #[override_final] with #[default] to make top level."),
+			     Replace #[override_final] with #[default] or higher to make top level."),
 		"1" => 
 		    format!("Function requested final. \
-			     Replace #[override_final] with #[override_default] to make top level."),
+			     Replace #[override_final] with #[override_default] \
+			     or higher to make top level."),
 		priority_lesser => 
 		    format!("Function requested final. \
-			     Replace #[override_final] with #[override_default(priority = {})] to make top level.",
+			     Replace #[override_final] with #[override_default(priority = {})] \
+			     or higher  to make top level.",
 			    priority_lesser),
 	    }
 	).to_compile_error().into();

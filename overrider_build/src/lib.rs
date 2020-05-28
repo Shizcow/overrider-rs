@@ -142,17 +142,24 @@ pub fn watch_files(file_names: Vec<&str>) {
     }
 
     // print cfgs
-    for chain in override_chains.into_iter() {
+    for chain in override_chains.iter() {
 	let (i_of_max, _) = chain.iter().enumerate().max_by_key(|x| x.1.priority.abs()).unwrap();
 	for fin in &finals {
 	    if fin == &chain[i_of_max].flag {
 		println!("cargo:rustc-env=__override_final_{}={}", fin, chain[i_of_max].priority+1);
 	    }
 	}
-	for (i, overrider) in chain.into_iter().enumerate(){
+	for (i, overrider) in chain.iter().enumerate(){
 	    if i_of_max != i {
 		println!("cargo:rustc-cfg=__override_priority_{}_{}", overrider.priority, overrider.flag);
 	    }
 	};
+    }
+    
+    // sometimes there's something in fin that's not in override_chains. If so, priority = 0
+    for fin in finals.into_iter() {
+	if !override_chains.iter().any(|chain| chain[0].flag == fin) {
+	    println!("cargo:rustc-env=__override_final_{}={}", fin, 0);
+	}
     }
 }
