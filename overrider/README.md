@@ -45,3 +45,5 @@ fn main() {
 }
 
 ```
+
+For examples, see [the git repo](https://github.com/Shizcow/overrider-rs/tree/master/examples).
