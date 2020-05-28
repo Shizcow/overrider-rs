@@ -57,7 +57,12 @@ pub fn watch_files(file_names: Vec<&str>) {
 	let mut src = String::new(); 
 	file.read_to_string(&mut src).expect(&format!("Unable to read file '{}'", file_name));
 
-	for item in syn::parse_file(&src).expect(&format!("Unable to parse file '{}'", file_name)).items {
+	let parsed = match syn::parse_file(&src) {
+	    Ok(items) => items,
+	    Err(_) => return, // There's a compiler error. Let rustc take care of it
+	};
+
+	for item in parsed.items {
 	    match item { // step over everything in the file
 		syn::Item::Fn(func) => {
 		    match get_priority(&func.attrs) {
