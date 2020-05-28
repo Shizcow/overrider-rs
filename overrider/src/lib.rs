@@ -1,4 +1,4 @@
-use syn::{parse::Nothing, ImplItem::Method, Type::Path, ItemFn, ItemImpl, DeriveInput, Ident};
+use syn::{parse::Nothing, ImplItem::{Method, Const}, Type::Path, ItemFn, ItemImpl, DeriveInput, Ident};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
@@ -32,6 +32,25 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 			},
 		    }
 		},
+		Const(constant) => {
+		    let priority_lesser = 
+			std::env::var(format!("__override_final_implconst_{}_{}", self_type, &constant.ident.to_string()))
+			.expect("Failed covering final. \
+				 Did you configure your build script to watch this file?");
+		    let new_error = syn::Error::new(
+			constant.ident.span(),
+			format!("Impl constant requested final. \
+				 Replace #[override_final] with #[override(priority = {})] \
+				 on a (seperate if required) impl block to make top level.",
+				priority_lesser));
+		    match acc {
+			None => Some(new_error),
+			Some(mut errors) => {
+			    errors.combine(new_error);
+			    Some(errors)
+			},
+		    }
+		}
 		_ => panic!("I can't finalize anything other than methods in an impl block yet"),
 	    }
 	) {
@@ -141,6 +160,20 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
 			}
 		    ).unwrap().attrs.swap_remove(0));
 	    },
+	    Const(constant) => {
+		let override_flag = Ident::new(
+		    &format!("__override_priority_{}_implconst_{}_{}",
+			     priority,
+			     self_type,
+			     &constant.ident), Span::call_site());
+		constant.attrs.push(
+		    syn::parse2::<DeriveInput>(
+			quote! {
+			    #[cfg(not(#override_flag))]
+			    struct Dummy;
+			}
+		    ).unwrap().attrs.swap_remove(0));
+	    }
 	    _ => panic!("I can't overload anything other than methods in an impl block yet"),
 	}
     }

@@ -1,4 +1,4 @@
-use syn::{Type::Path, ImplItem::Method};
+use syn::{Type::Path, ImplItem::{Method, Const}};
 use std::fs::File;
 use std::io::Read;
 
@@ -105,6 +105,13 @@ pub fn watch_files(file_names: Vec<&str>) {
 							  &method.sig.ident),
 					    priority,
 					}),
+				    Const(constant) =>
+					overrides.push(Override{
+					    flag: format!("implconst_{}_{}",
+							  self_type,
+							  &constant.ident),
+					    priority,
+					}),
 				    _ => panic!("I can't overload anything other than methods in an impl block yet"),
 				}
 			    }
@@ -121,6 +128,10 @@ pub fn watch_files(file_names: Vec<&str>) {
 					finals.push(format!("method_{}_{}",
 							    self_type,
 							    &method.sig.ident)),
+				    Const(constant) =>
+					finals.push(format!("implconst_{}_{}",
+							    self_type,
+							    &constant.ident)),
 				    _ => panic!("I can't finalize anything other than methods in an impl block yet"),
 				}
 			    }

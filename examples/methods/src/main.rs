@@ -15,10 +15,11 @@ impl Dummy {
     fn baz(&self) -> &'static str {
 	"default baz"
     }
+    const C: &'static str = "Here's a constant";
 }
 
 
-// You can comment out the whole block, or only single functions
+// You can comment out the whole block, or only single items
 #[override_default]
 impl Dummy {
     fn foo(&self) -> &'static str {
@@ -27,11 +28,13 @@ impl Dummy {
     fn bar(&self) -> &'static str {
 	"overriden bar"
     }
-    /* See, not everything needs to be overriden at once
+    /* For example, not everything needs to be overriden at once
     fn baz(&self) -> &'static str {
 	"overriden baz"
     }
      */
+    // we can also override constants
+    const C: &'static str = "Here's an overriden constant";
 }
 
 fn main() {
@@ -39,4 +42,5 @@ fn main() {
     println!("{}", dummy.foo());
     println!("{}", dummy.bar());
     println!("{}", dummy.baz());
+    println!("{}", Dummy::C);
 }
