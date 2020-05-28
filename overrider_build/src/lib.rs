@@ -42,7 +42,7 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Result<i32, Status> {
 
 
 #[derive(Debug)]
-struct Override { // TODO: more debug info
+struct Override {
     pub flag: String,
     pub priority: i32,
 }
@@ -75,7 +75,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 			Ok(priority) => {
 			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
 				Path(path) => path,
-				_ => panic!("Could not get Path for impl (should never see this)"),
+				_ => continue,
 			    }.path.segments[0].ident.to_string();
 			    
 			    for item in impl_block.items {
@@ -94,14 +94,14 @@ pub fn watch_files(file_names: Vec<&str>) {
 							  &constant.ident),
 					    priority,
 					}),
-				    _ => panic!("I can't overload anything other than methods in an impl block yet"),
+				    _ => continue,
 				}
 			    }
 			},
 			Err(Final) => {
 			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
 				Path(path) => path,
-				_ => panic!("Could not get Path for impl (should never see this)"),
+				_ => continue,
 			    }.path.segments[0].ident.to_string();
 			    
 			    for item in impl_block.items {
@@ -114,7 +114,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 					finals.push(format!("implconst_{}_{}",
 							    self_type,
 							    &constant.ident)),
-				    _ => panic!("I can't finalize anything other than methods in an impl block yet"),
+				    _ => continue,
 				}
 			    }
 			},

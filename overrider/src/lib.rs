@@ -136,8 +136,8 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
     let self_type = match input.self_ty.as_ref() {
 	Path(path) => path,
 	item => return syn::Error::new(
-		item.span(),
-		format!("Could not get Path for impl (should never see this)"))
+	    item.span(),
+	    format!("Could not get Path for impl (should never see this)"))
 	    .to_compile_error().into(),
     }.path.segments[0].ident.to_string();
 
@@ -146,8 +146,8 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
 	match item {
 	    Method(method) =>
 		attr_flag(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
-			     priority,
-			     self_type,
+						     priority,
+						     self_type,
 						     &method.sig.ident)),
 	    Const(constant) =>
 		attr_flag(&mut constant.attrs, format!("__override_priority_{}_implconst_{}_{}",
