@@ -1,8 +1,7 @@
 # examples
 
 This is a collection of examples for the `overrider` crates.  
-They are listed below in order of increasingly advanced
-utilization of the `overrider` crates.
+They are listed below in order of increasingly advanced usage.
 
 ### hello_world
 A simple hello world program, showing the basics of overriding.  
