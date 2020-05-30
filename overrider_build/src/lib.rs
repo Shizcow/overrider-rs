@@ -2,9 +2,9 @@ use syn::{Type::Path, ImplItem::{Method, Const}};
 use std::fs::File;
 use std::io::Read;
 
-enum Status {Final, Empty}
+enum Status {Norm(i32), Flag(String, i32), Final, Empty}
 use Status::*;
-fn get_priority(attrs: &Vec<syn::Attribute>) -> Result<i32, Status> {
+fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
     for attr in attrs { // there's no error checking; overrider main can give richer error messages
 	if attr.path.segments[0].ident.to_string() == "override_default" {
 	    if let Ok(syn::Expr::Paren(expr)) = syn::parse2::<syn::Expr>(attr.tokens.clone()) {
@@ -15,7 +15,7 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Result<i32, Status> {
 				if let syn::Expr::Lit(lit) = *assign.right {
 				    if let syn::Lit::Int(i) = lit.lit {
 					if let Ok(priority) = i.base10_parse::<i32>() {
-					    return Ok(priority);
+					    return Norm(priority);
 					}
 				    }
 				}
@@ -24,20 +24,29 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Result<i32, Status> {
 		}
 	    } else { // might be default
 		if attr.tokens.is_empty() {
-		    return Ok(1);
+		    return Norm(1);
+		}
+	    }
+	} else if attr.path.segments[0].ident.to_string() == "override_flag" {
+	    if !attr.tokens.is_empty() { // TODDO 
+		if let Ok(syn::Expr::Paren(expr)) = syn::parse2::<syn::Expr>(attr.tokens.clone()) {
+		    if let syn::Expr::Path(name) = *expr.expr {
+			// TODO: impliment priorities for flags
+			return Flag(name.path.segments[0].ident.to_string(), 0);
+		    }
 		}
 	    }
 	} else if attr.path.segments[0].ident.to_string() == "default" {
 	    if attr.tokens.is_empty() {
-		return Ok(0);
+		return Norm(0);
 	    }
 	} else if attr.path.segments[0].ident.to_string() == "override_final" {
 	    if attr.tokens.is_empty() {
-		return Err(Final);
+		return Final;
 	    }
 	}
     }
-    Err(Empty)
+    Empty
 }
 
 
@@ -47,11 +56,19 @@ struct Override {
     pub priority: i32,
 }
 
+#[derive(Debug)]
+struct Flagger {
+    pub sig: String,
+    pub flag: String,
+    pub priority: i32,
+}
+
 pub fn watch_files(file_names: Vec<&str>) {
 
     // find all overrides in files
     let mut overrides: Vec<Override> = Vec::new();
     let mut finals:    Vec<String>   = Vec::new();
+    let mut flags:     Vec<Flagger>  = Vec::new();
     for file_name in file_names {
 	let mut file = File::open(file_name).expect(&format!("Unable to open file '{}'", file_name));
 	let mut src = String::new(); 
@@ -61,23 +78,30 @@ pub fn watch_files(file_names: Vec<&str>) {
 	    Ok(items) => items,
 	    Err(_) => return, // There's a compiler error. Let rustc take care of it
 	};
-
+	
 	for item in parsed.items {
 	    match item { // step over everything in the file
 		syn::Item::Fn(func) => {
 		    match get_priority(&func.attrs) {
-			Ok(priority) =>
+			Norm(priority) =>
 			    overrides.push(Override{
 				flag: format!("func_{}",func.sig.ident),
 				priority,
 			    }),
-			Err(Final) => finals.push(format!("func_{}", func.sig.ident)),
-			Err(Empty) => {},
+			Flag(flag, priority) => // TODO: add meta-overload of flags vie priorities
+			    flags.push(Flagger{
+				sig: format!("func_{}",func.sig.ident),
+				flag,
+				priority,
+			    }),
+			Final => finals.push(format!("func_{}", func.sig.ident)),
+			Empty => {},
 		    }
 		},
 		syn::Item::Impl(impl_block) => {
 		    match get_priority(&impl_block.attrs) {
-			Ok(priority) => {
+			Flag(_, _) => panic!("Can't yet lay flags on impls"),
+			Norm(priority) => {
 			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
 				Path(path) => path,
 				_ => continue,
@@ -103,7 +127,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 				}
 			    }
 			},
-			Err(Final) => {
+			Final => {
 			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
 				Path(path) => path,
 				_ => continue,
@@ -123,7 +147,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 				}
 			    }
 			},
-			Err(Empty) => {},
+			Empty => {},
 		    }
 		},
 		_ => {} // can't parse everything yet
@@ -133,6 +157,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 
     // group them into like targets
     let mut override_chains: Vec<Vec<Override>> = Vec::new();
+    // [[for each priority] for each item]
     for overrider in overrides.into_iter() {
 	if let Some(position) = override_chains.iter().position(|chain| chain[0].flag == overrider.flag) {
 	    override_chains[position].push(overrider);
@@ -160,6 +185,33 @@ pub fn watch_files(file_names: Vec<&str>) {
     for fin in finals.into_iter() {
 	if !override_chains.iter().any(|chain| chain[0].flag == fin) {
 	    println!("cargo:rustc-env=__override_final_{}={}", fin, 0);
+	}
+    }
+
+    // now for flags. This will look familiar
+    let mut flag_chains: Vec<Vec<Vec<Flagger>>> = Vec::new();
+    // [[[for each priority] for each --flag] for each item]
+    for flag in flags {
+	if let Some(item_found) = flag_chains.iter().position(|chain| chain[0][0].sig == flag.sig) {
+	    if let Some(flag_found) = flag_chains[item_found].iter().position(|flag_pack| flag_pack[0].flag == flag.flag) {
+		flag_chains[item_found][flag_found].push(flag);
+	    } else {
+		flag_chains[item_found].push(vec![flag]);
+	    }
+	} else {
+	    flag_chains.push(vec![vec![flag]]);
+	}
+    }
+    for flag_chain in flag_chains.into_iter() {
+	let cargoflag = format!("__override_acceptflags_{}", flag_chain[0][0].sig);
+	let item_flags = flag_chain.iter().map(|e| e[0].flag.clone())
+	    .collect::<Vec<String>>().join(" "); // TODO: error check for spaces in flag
+	println!("cargo:rustc-env={}={}", cargoflag, item_flags);
+
+	for flag in flag_chain.into_iter() { // TODO: combine with iter above
+	    let (_, maxflag) = flag.into_iter().enumerate()
+		.max_by_key(|x| x.1.priority.abs()).unwrap();
+	    println!("cargo:rustc-cfg=__override_priority_{}_flag_{}_{}", maxflag.priority, maxflag.flag, maxflag.sig);
 	}
     }
 }

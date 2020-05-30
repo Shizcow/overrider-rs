@@ -1,0 +1,13 @@
+[package]
+name = "flags"
+version = "0.1.0"
+authors = ["Shizcow <pohl.devin@gmail.com>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+overrider = { path = '../../overrider' }
+# TODO: 0.4
+
+[build-dependencies]
+overrider_build = { path = '../../overrider_build' }

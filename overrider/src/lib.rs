@@ -24,16 +24,16 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 			match priority_lesser.as_str() {
 			    "0" => 
 				format!("Method requested final. \
-				 Replace #[override_final] with #[default] or higher \
-				 on a (seperate if required) impl block to make top level."),
+					 Replace #[override_final] with #[default] or higher \
+					 on a (seperate if required) impl block to make top level."),
 			    "1" => 
 				format!("Method requested final. \
-				 Replace #[override_final] with #[override_default] or higher  \
-				 on a (seperate if required) impl block to make top level."),
+					 Replace #[override_final] with #[override_default] or higher  \
+					 on a (seperate if required) impl block to make top level."),
 			    priority_lesser => 
 				format!("Method requested final. \
-				 Replace #[override_final] with #[override_default(priority = {})] \
-				  or higher on a (seperate if required) impl block to make top level.",
+					 Replace #[override_final] with #[override_default(priority = {})] \
+					 or higher on a (seperate if required) impl block to make top level.",
 					priority_lesser),
 			}
 		    )
@@ -57,7 +57,7 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 			    priority_lesser => 
 				format!("Impl constant requested final. \
 					 Replace #[override_final] with #[override_default(priority = {})] \
-					  or higher on a (seperate if required) impl block to make top level.",
+					 or higher on a (seperate if required) impl block to make top level.",
 					priority_lesser),
 			}
 		    )
@@ -158,12 +158,20 @@ fn attach(input: TokenStream, priority: i32) -> TokenStream { // TODO: do this w
 }
 
 fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
-    attr_flag(&mut input.attrs,
-	      format!("__override_priority_{}_func_{}", priority, &input.sig.ident));
-    
-    TokenStream::from(quote! {
-	#input
-    })
+    match std::env::var(format!("__override_acceptflags_func_{}", &input.sig.ident)) {
+	Err(_) => { // no flags to worry about
+	    attr_flag(&mut input.attrs,
+		      format!("__override_priority_{}_func_{}", priority, &input.sig.ident));
+	    
+	    TokenStream::from(quote! {
+		#input
+	    })
+	},
+	Ok(flags) => {
+	    println!("{:?}", flags); // TODO
+	    TokenStream::new()
+	}
+    }
 }
 
 fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
@@ -209,4 +217,65 @@ fn attr_flag(attrs: &mut Vec<Attribute>, flag: String) {
 		struct Dummy;
 	    }
 	).unwrap().attrs.swap_remove(0));
+}
+
+#[proc_macro_attribute]
+pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // TODO: default_flag
+    // parse 2 arguements (flag = x, priority = y)
+    // TODO check =, +=, -= etc chars
+    let (flag, priority) = 
+    if let Ok(expr) = syn::parse::<syn::Expr>(attr.clone()) {
+	if let syn::Expr::Assign(assign) = expr {
+	    if let (syn::Expr::Path(left), syn::Expr::Path(right)) = (*assign.left, *assign.right) {
+		if left.path.segments[0].ident.to_string() == "flag" {
+		    (right.path.segments[0].ident.to_string(), 1)
+		} else {
+		    panic!("arg must be flag");
+		}
+	    } else {
+		panic!("Bad arg form / need flag");
+	    }
+	} else {
+	    panic!("Bad arg");
+	}
+    } else { // try to parse manually
+	    let attrstr = attr.to_string();
+	    if attrstr.matches(",").count() == 1 {
+		let args = attrstr.split(",").collect::<Vec<&str>>();
+		if let (Ok(syn::Expr::Assign(arg1)), Ok(syn::Expr::Assign(arg2))) = (syn::parse_str::<syn::Expr>(args[0]), syn::parse_str::<syn::Expr>(args[1])) {
+		    if let (syn::Expr::Path(left1), syn::Expr::Path(left2)) = (*arg1.left, *arg2.left) {
+			let (flagarg, parg) = 
+			    if left1.path.segments[0].ident.to_string() == "flag" && left2.path.segments[0].ident.to_string() == "priority" {
+				((left1, *arg1.right), (left2, *arg2.right))
+			    } else if left1.path.segments[0].ident.to_string() == "priority" && left2.path.segments[0].ident.to_string() == "flag" {
+				((left2, *arg2.right), (left1, *arg1.right))
+			    } else {
+				panic!("invalid arg 3");
+			    };
+			if let (syn::Expr::Path(right1), syn::Expr::Lit(right2)) = (flagarg.1, parg.1) {
+			    if let syn::Lit::Int(right2int) = right2.lit {
+				if let Ok(right2val) = right2int.base10_parse::<i32>() { // TODO u32
+				    (right1.path.segments[0].ident.to_string(), right2val)
+				} else {
+				    panic!("wrong type for lit");
+				}
+			    } else {
+				panic!("invalid lit");
+			    }
+			} else {
+			    panic!("invalid arg 1");
+			}
+		    } else {
+			panic!("nopath");
+		    }
+		} else {
+		    panic!("Invalid arg form");
+		}
+	    } else {
+		panic!("Invalid arg list");
+	    }
+    };
+    panic!("{}, {}", flag, priority);
+
+    TokenStream::new()
 }

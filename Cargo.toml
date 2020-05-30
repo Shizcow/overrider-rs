@@ -7,4 +7,5 @@ members = [
     "examples/methods",
     "examples/priorities",
     "examples/finals",
+    "examples/flags",
 ]
