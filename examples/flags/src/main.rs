@@ -14,4 +14,8 @@ fn main() {
 fn main() {
     println!("Changed by flag -a");
 }
-*/
+ */
+
+fn main() {
+    __override_flagext_change_main();
+}

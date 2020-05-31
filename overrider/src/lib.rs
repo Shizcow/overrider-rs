@@ -168,7 +168,7 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
 	    })
 	},
 	Ok(flags) => {
-	    println!("{:?}", flags); // TODO
+	    println!("CHANGE DEFAULT FOR FLAG: {:?}", flags); // TODO
 	    TokenStream::new()
 	}
     }
@@ -275,7 +275,22 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // 
 		panic!("Invalid arg list");
 	    }
     };
-    panic!("{}, {}", flag, priority);
-
-    TokenStream::new()
+    
+    if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
+	panic!("can't flag impl yet")
+    } else if let Ok(mut item) = syn::parse::<ItemFn>(input) {
+	attr_flag(&mut item.attrs,
+		  format!("__override_priority_{}_flag_{}_func_{}",
+			  priority, flag, item.sig.ident));
+	//__override_priority_1_flag_change_func_main
+	item.sig.ident = Ident::new(&format!("__override_flagext_{}_{}",
+					     flag, item.sig.ident),
+				    Span::call_site());
+	return TokenStream::from(quote! {
+	    #[inline]
+	    #item
+	});
+    } else {
+	quick_error(format!("I can't parse this yet"))
+    }
 }

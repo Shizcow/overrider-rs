@@ -28,11 +28,14 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
 		}
 	    }
 	} else if attr.path.segments[0].ident.to_string() == "override_flag" {
-	    if !attr.tokens.is_empty() { // TODDO 
+	    if !attr.tokens.is_empty() { // TODDO;
 		if let Ok(syn::Expr::Paren(expr)) = syn::parse2::<syn::Expr>(attr.tokens.clone()) {
-		    if let syn::Expr::Path(name) = *expr.expr {
-			// TODO: impliment priorities for flags
-			return Flag(name.path.segments[0].ident.to_string(), 0);
+		    if let syn::Expr::Assign(assign) = *expr.expr {
+			if let (syn::Expr::Path(left), syn::Expr::Path(right)) = (*assign.left, *assign.right) {
+			    if left.path.segments[0].ident.to_string() == "flag" {
+				return Flag(right.path.segments[0].ident.to_string(), 1);
+			    }
+			}
 		    }
 		}
 	    }
@@ -88,12 +91,13 @@ pub fn watch_files(file_names: Vec<&str>) {
 				flag: format!("func_{}",func.sig.ident),
 				priority,
 			    }),
-			Flag(flag, priority) => // TODO: add meta-overload of flags vie priorities
+			Flag(flag, priority) => {// TODO: add meta-overload of flags vie priorities
 			    flags.push(Flagger{
 				sig: format!("func_{}",func.sig.ident),
 				flag,
 				priority,
-			    }),
+			    })}
+			,
 			Final => finals.push(format!("func_{}", func.sig.ident)),
 			Empty => {},
 		    }
@@ -202,16 +206,21 @@ pub fn watch_files(file_names: Vec<&str>) {
 	    flag_chains.push(vec![vec![flag]]);
 	}
     }
+    
     for flag_chain in flag_chains.into_iter() {
 	let cargoflag = format!("__override_acceptflags_{}", flag_chain[0][0].sig);
 	let item_flags = flag_chain.iter().map(|e| e[0].flag.clone())
 	    .collect::<Vec<String>>().join(" "); // TODO: error check for spaces in flag
 	println!("cargo:rustc-env={}={}", cargoflag, item_flags);
-
+	
 	for flag in flag_chain.into_iter() { // TODO: combine with iter above
-	    let (_, maxflag) = flag.into_iter().enumerate()
+	    let (i_of_max, _) = flag.iter().enumerate()
 		.max_by_key(|x| x.1.priority.abs()).unwrap();
-	    println!("cargo:rustc-cfg=__override_priority_{}_flag_{}_{}", maxflag.priority, maxflag.flag, maxflag.sig);
+	    for (i, p) in flag.into_iter().enumerate() {
+		if i_of_max != i {
+		    println!("cargo:rustc-cfg=__override_priority_{}_flag_{}_{}", p.priority, p.flag, p.sig);
+		}
+	    }
 	}
     }
 }
