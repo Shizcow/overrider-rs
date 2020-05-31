@@ -29,14 +29,39 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
 	    }
 	} else if attr.path.segments[0].ident.to_string() == "override_flag" {
 	    if !attr.tokens.is_empty() { // TODDO;
-		if let Ok(syn::Expr::Paren(expr)) = syn::parse2::<syn::Expr>(attr.tokens.clone()) {
-		    if let syn::Expr::Assign(assign) = *expr.expr {
-			if let (syn::Expr::Path(left), syn::Expr::Path(right)) = (*assign.left, *assign.right) {
-			    if left.path.segments[0].ident.to_string() == "flag" {
-				return Flag(right.path.segments[0].ident.to_string(), 1);
+		match syn::parse2::<syn::Expr>(attr.tokens.clone()) {
+		    Ok(syn::Expr::Paren(expr)) => 
+			if let syn::Expr::Assign(assign) = *expr.expr {
+			    if let (syn::Expr::Path(left), syn::Expr::Path(right)) = (*assign.left, *assign.right) {
+				if left.path.segments[0].ident.to_string() == "flag" {
+				    return Flag(right.path.segments[0].ident.to_string(), 1);
+				}
+			    }
+			},
+		    Ok(syn::Expr::Tuple(tuple)) => {
+			let mut elems = tuple.elems.into_iter();
+			if let (Some(syn::Expr::Assign(assign1)), Some(syn::Expr::Assign(assign2))) = (elems.next(), elems.next())
+			{
+			    if let (syn::Expr::Path(left1), syn::Expr::Path(left2)) = (*assign1.left, *assign2.left) {
+				let (flagarg, parg) = 
+				    if left1.path.segments[0].ident.to_string() == "flag" && left2.path.segments[0].ident.to_string() == "priority" {
+					((left1, *assign1.right), (left2, *assign2.right))
+				    } else if left1.path.segments[0].ident.to_string() == "priority" && left2.path.segments[0].ident.to_string() == "flag" {
+					((left2, *assign2.right), (left1, *assign1.right))
+				    } else {
+					return Empty;
+				    };
+				if let (syn::Expr::Path(right1), syn::Expr::Lit(right2)) = (flagarg.1, parg.1) {
+				    if let syn::Lit::Int(right2int) = right2.lit {
+					if let Ok(right2val) = right2int.base10_parse::<i32>() { // TODO u32
+					    return Flag(right1.path.segments[0].ident.to_string(), right2val);
+					}
+				    }
+				}
 			    }
 			}
-		    }
+		    },
+		    _ => {},
 		}
 	    }
 	} else if attr.path.segments[0].ident.to_string() == "default" {
