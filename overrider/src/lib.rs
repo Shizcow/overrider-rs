@@ -8,7 +8,7 @@ use quote::quote;
 pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
     syn::parse_macro_input!(attr as Nothing); // I take no args
     if let Ok(impl_block) = syn::parse::<ItemImpl>(input.clone()) {
-	let self_type = match impl_block.self_ty.as_ref() {
+	let self_type = match impl_block.self_ty.as_ref() { // TODO function
 	    Path(path) => path,
 	    _ => return quick_error(format!("Could not get Path for impl (should never see this)")),
 	}.path.segments[0].ident.to_string();
@@ -410,13 +410,17 @@ fn flag_function(mut item: ItemFn, priority: i32, flag: String) -> TokenStream {
     });
 }
 
-fn flag_impl(mut item: ItemImpl, priority: i32, flag: String) -> TokenStream {
-    for item in &mut item.items {
+fn flag_impl(mut impl_block: ItemImpl, priority: i32, flag: String) -> TokenStream {
+    let self_type = match impl_block.self_ty.as_ref() {
+	Path(path) => path,
+	_ => return quick_error(format!("Could not get Path for impl (should never see this)")),
+    }.path.segments[0].ident.to_string();
+    for item in &mut impl_block.items {
 	match item {
 	    Method(method) => {
 		attr_add(&mut method.attrs,
-			 format!("__override_priority_{}_flag_{}_method_{}",
-				 priority, flag, method.sig.ident));
+			 format!("__override_priority_{}_flag_{}_method_{}_{}",
+				 priority, flag, self_type, method.sig.ident));
 		attr_inline(&mut method.attrs);
 		method.sig.ident = Ident::new(&format!("__override_flagext_{}_{}",
 						       flag, method.sig.ident),
@@ -424,13 +428,6 @@ fn flag_impl(mut item: ItemImpl, priority: i32, flag: String) -> TokenStream {
 	    },
 	    Const(_constant) => {
 		panic!("flagging a constant currently envokes undefined behavior");
-		/*
-		attr_add(&mut constant.attrs,
-		format!("__override_priority_{}_flag_{}_implconst_{}",
-		priority, flag, &constant.ident.to_string()));
-		constant.ident = Ident::new(&format!("__override_flagext_{}_{}",
-		flag, &constant.ident.to_string()),
-		Span::call_site());*/
 	    },
 	    item => return syn::Error::new(
 		item.span(),
@@ -439,6 +436,6 @@ fn flag_impl(mut item: ItemImpl, priority: i32, flag: String) -> TokenStream {
 	}
     }
     TokenStream::from(quote! {
-	#item
+	#impl_block
     })
 }

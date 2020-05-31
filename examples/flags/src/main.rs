@@ -37,7 +37,6 @@ fn foo() {
 // syntax for impls is similar
 struct Dummy{}
 
-
 #[default]
 impl Dummy {
     pub fn foo() {
@@ -52,10 +51,10 @@ impl Dummy {
     }
 }
 
-#[override_flag(flag = b)]
+#[override_flag(flag = a, priority = 2)] // flags also work with priorities
 impl Dummy {
     pub fn foo() {
-	println!("impl changed by a different flag");
+	println!("impl changed by flag with higher priority");
     }
 }
 
