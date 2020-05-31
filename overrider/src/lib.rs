@@ -161,7 +161,7 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
     match std::env::var(format!("__override_acceptflags_func_{}", &input.sig.ident)) {
 	Err(_) => { // no flags to worry about
 	    attr_add(&mut input.attrs,
-		      format!("__override_priority_{}_func_{}", priority, &input.sig.ident));
+		     format!("__override_priority_{}_func_{}", priority, &input.sig.ident));
 	    
 	    TokenStream::from(quote! {
 		#input
@@ -230,15 +230,28 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
     for item in &mut input.items {
 	match item {
 	    Method(method) =>
-		attr_add(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
-						     priority,
-						     self_type,
-						     &method.sig.ident)),
+		match std::env::var(format!("__override_acceptflags_method_{}_{}", self_type, &method.sig.ident)) {
+		    Err(_) => // no flags to worry about
+			attr_add(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
+							    priority,
+							    self_type,
+							    &method.sig.ident)),
+		    Ok(flags) => {
+			panic!("found flags!")
+		    }
+		},
 	    Const(constant) =>
-		attr_add(&mut constant.attrs, format!("__override_priority_{}_implconst_{}_{}",
-						       priority,
-						       self_type,
-						       &constant.ident)),
+		match std::env::var(format!("__override_acceptflags_method_{}", self_type)) {
+		    Err(_) => // no flags to worry about
+			attr_add(&mut constant.attrs, format!("__override_priority_{}_implconst_{}_{}",
+							      priority,
+							      self_type,
+							      &constant.ident)),
+		    Ok(_) => return syn::Error::new(
+			item.span(),
+			format!("Laying flags on const currently envokes undefined behavior"))
+			.to_compile_error().into(),
+		},
 	    item => return syn::Error::new(
 		item.span(),
 		format!("I can't overload anything other than methods/consts in an impl block yet"))
@@ -276,21 +289,21 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // 
     // parse 2 arguements (flag = x, priority = y)
     // TODO check =, +=, -= etc chars
     let (flag, priority) = 
-    if let Ok(expr) = syn::parse::<syn::Expr>(attr.clone()) {
-	if let syn::Expr::Assign(assign) = expr {
-	    if let (syn::Expr::Path(left), syn::Expr::Path(right)) = (*assign.left, *assign.right) {
-		if left.path.segments[0].ident.to_string() == "flag" {
-		    (right.path.segments[0].ident.to_string(), 1)
+	if let Ok(expr) = syn::parse::<syn::Expr>(attr.clone()) {
+	    if let syn::Expr::Assign(assign) = expr {
+		if let (syn::Expr::Path(left), syn::Expr::Path(right)) = (*assign.left, *assign.right) {
+		    if left.path.segments[0].ident.to_string() == "flag" {
+			(right.path.segments[0].ident.to_string(), 1)
+		    } else {
+			panic!("arg must be flag");
+		    }
 		} else {
-		    panic!("arg must be flag");
+		    panic!("Bad arg form / need flag");
 		}
 	    } else {
-		panic!("Bad arg form / need flag");
+		panic!("Bad arg");
 	    }
-	} else {
-	    panic!("Bad arg");
-	}
-    } else { // try to parse manually
+	} else { // try to parse manually
 	    let attrstr = attr.to_string();
 	    if attrstr.matches(",").count() == 1 {
 		let args = attrstr.split(",").collect::<Vec<&str>>();
@@ -326,7 +339,7 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // 
 	    } else {
 		panic!("Invalid arg list");
 	    }
-    };
+	};
     
     if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
 	flag_impl(item, priority, flag)
@@ -361,18 +374,18 @@ fn flag_impl(mut item: ItemImpl, priority: i32, flag: String) -> TokenStream {
 				 priority, flag, method.sig.ident));
 		attr_inline(&mut method.attrs);
 		method.sig.ident = Ident::new(&format!("__override_flagext_{}_{}",
-						     flag, method.sig.ident),
-					    Span::call_site());
+						       flag, method.sig.ident),
+					      Span::call_site());
 	    },
 	    Const(_constant) => {
 		panic!("flagging a constant currently envokes undefined behavior");
 		/*
 		attr_add(&mut constant.attrs,
-			 format!("__override_priority_{}_flag_{}_implconst_{}",
-				 priority, flag, &constant.ident.to_string()));
+		format!("__override_priority_{}_flag_{}_implconst_{}",
+		priority, flag, &constant.ident.to_string()));
 		constant.ident = Ident::new(&format!("__override_flagext_{}_{}",
-						     flag, &constant.ident.to_string()),
-					    Span::call_site());*/
+		flag, &constant.ident.to_string()),
+		Span::call_site());*/
 	    },
 	    item => return syn::Error::new(
 		item.span(),

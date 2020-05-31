@@ -269,7 +269,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 	    let (i_of_max, _) = flag.iter().enumerate()
 		.max_by_key(|x| x.1.priority.abs()).unwrap();
 	    for (i, p) in flag.into_iter().enumerate() {
-		if i_of_max != i {
+		if i_of_max != i { // TODO
 		    println!("cargo:rustc-cfg=__override_priority_{}_flag_{}_{}", p.priority, p.flag, p.sig);
 		}
 	    }

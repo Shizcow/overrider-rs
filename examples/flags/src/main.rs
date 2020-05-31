@@ -17,7 +17,7 @@ lazy_static::lazy_static! {
             .get_matches()
     };
 }
-
+/*
 // Must provide a default case
 #[default]
 fn foo() {
@@ -33,7 +33,7 @@ fn foo() {
 fn foo() {
     println!("fn changed by a different flag");
 }
-
+*/
 // syntax for impls is similar
 struct Dummy{}
 
