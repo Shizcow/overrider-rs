@@ -10,27 +10,49 @@ lazy_static::lazy_static! {
             .arg(Arg::with_name("a")
                  .short("a")
 		 .help("A switch to change the output of foo (try it)")
-		 .conflicts_with("b")) // NOTE: not defining conflictions envokes undefined behavior
+		 .conflicts_with("b")) // NOTE: defining both is currently undefined behavior
             .arg(Arg::with_name("b")
                  .short("b")
-		 .help("Another switch to change the output of foo (try it)")
-		 .conflicts_with("a"))
+		 .help("Another switch to change the output of foo (try it)"))
             .get_matches()
     };
 }
 
-
+// Must provide a default case
 #[default]
-fn main() {
-    println!("Default");
+fn foo() {
+    println!("Default fn");
 }
 
 #[override_flag(flag = a)]
-fn main() {
-    println!("Changed by a flag");
+fn foo() {
+    println!("fn changed by a flag");
 }
 
 #[override_flag(flag = b)]
+fn foo() {
+    println!("fn changed by a different flag");
+}
+
+// syntax for impls is similar
+struct Dummy{}
+
+#[default]
+impl Dummy {
+    pub fn foo() {
+	println!("Default impl");
+    }
+}
+
+#[override_flag(flag = a)]
+impl Dummy {
+    pub fn foo() {
+	println!("Flag overriden impl");
+    }
+}
+
+
 fn main() {
-    println!("Changed by a different flag");
+    foo();
+    Dummy::__override_flagext_a_foo();
 }

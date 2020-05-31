@@ -160,7 +160,7 @@ fn attach(input: TokenStream, priority: i32) -> TokenStream { // TODO: do this w
 fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
     match std::env::var(format!("__override_acceptflags_func_{}", &input.sig.ident)) {
 	Err(_) => { // no flags to worry about
-	    attr_flag(&mut input.attrs,
+	    attr_add(&mut input.attrs,
 		      format!("__override_priority_{}_func_{}", priority, &input.sig.ident));
 	    
 	    TokenStream::from(quote! {
@@ -230,18 +230,18 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
     for item in &mut input.items {
 	match item {
 	    Method(method) =>
-		attr_flag(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
+		attr_add(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
 						     priority,
 						     self_type,
 						     &method.sig.ident)),
 	    Const(constant) =>
-		attr_flag(&mut constant.attrs, format!("__override_priority_{}_implconst_{}_{}",
+		attr_add(&mut constant.attrs, format!("__override_priority_{}_implconst_{}_{}",
 						       priority,
 						       self_type,
 						       &constant.ident)),
 	    item => return syn::Error::new(
 		item.span(),
-		format!("I can't overload anything other than methods in an impl block yet"))
+		format!("I can't overload anything other than methods/consts in an impl block yet"))
 		.to_compile_error().into(),
 	}
     }
@@ -250,12 +250,22 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
     })
 }
 
-fn attr_flag(attrs: &mut Vec<Attribute>, flag: String) {
+fn attr_add(attrs: &mut Vec<Attribute>, flag: String) {
     let override_flag = Ident::new(&flag, Span::call_site());
     attrs.push(
 	syn::parse2::<DeriveInput>(
 	    quote! {
 		#[cfg(not(#override_flag))]
+		struct Dummy;
+	    }
+	).unwrap().attrs.swap_remove(0));
+}
+
+fn attr_inline(attrs: &mut Vec<Attribute>) {
+    attrs.push(
+	syn::parse2::<DeriveInput>(
+	    quote! {
+		#[inline(always)]
 		struct Dummy;
 	    }
 	).unwrap().attrs.swap_remove(0));
@@ -319,20 +329,58 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // 
     };
     
     if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
-	panic!("can't flag impl yet")
-    } else if let Ok(mut item) = syn::parse::<ItemFn>(input) {
-	attr_flag(&mut item.attrs,
-		  format!("__override_priority_{}_flag_{}_func_{}",
-			  priority, flag, item.sig.ident));
-	//__override_priority_1_flag_change_func_main
-	item.sig.ident = Ident::new(&format!("__override_flagext_{}_{}",
-					     flag, item.sig.ident),
-				    Span::call_site());
-	return TokenStream::from(quote! {
-	    #[inline(always)]
-	    #item
-	});
+	flag_impl(item, priority, flag)
+    } else if let Ok(item) = syn::parse::<ItemFn>(input) {
+	flag_function(item, priority, flag)
     } else {
 	quick_error(format!("I can't parse this yet"))
     }
+}
+
+
+fn flag_function(mut item: ItemFn, priority: i32, flag: String) -> TokenStream {
+    attr_add(&mut item.attrs,
+	     format!("__override_priority_{}_flag_{}_func_{}",
+		     priority, flag, item.sig.ident));
+    attr_inline(&mut item.attrs);
+    //__override_priority_1_flag_change_func_main
+    item.sig.ident = Ident::new(&format!("__override_flagext_{}_{}",
+					 flag, item.sig.ident),
+				Span::call_site());
+    return TokenStream::from(quote! {
+	#item
+    });
+}
+
+fn flag_impl(mut item: ItemImpl, priority: i32, flag: String) -> TokenStream {
+    for item in &mut item.items {
+	match item {
+	    Method(method) => {
+		attr_add(&mut method.attrs,
+			 format!("__override_priority_{}_flag_{}_method_{}",
+				 priority, flag, method.sig.ident));
+		attr_inline(&mut method.attrs);
+		method.sig.ident = Ident::new(&format!("__override_flagext_{}_{}",
+						     flag, method.sig.ident),
+					    Span::call_site());
+	    },
+	    Const(_constant) => {
+		panic!("flagging a constant currently envokes undefined behavior");
+		/*
+		attr_add(&mut constant.attrs,
+			 format!("__override_priority_{}_flag_{}_implconst_{}",
+				 priority, flag, &constant.ident.to_string()));
+		constant.ident = Ident::new(&format!("__override_flagext_{}_{}",
+						     flag, &constant.ident.to_string()),
+					    Span::call_site());*/
+	    },
+	    item => return syn::Error::new(
+		item.span(),
+		format!("I can't overload anything other than methods/consts in an impl block yet"))
+		.to_compile_error().into(),
+	}
+    }
+    TokenStream::from(quote! {
+	#item
+    })
 }

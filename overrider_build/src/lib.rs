@@ -80,7 +80,7 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
 
 #[derive(Debug)]
 struct Override {
-    pub flag: String,
+    pub sig: String,
     pub priority: i32,
 }
 
@@ -113,7 +113,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 		    match get_priority(&func.attrs) {
 			Norm(priority) =>
 			    overrides.push(Override{
-				flag: format!("func_{}",func.sig.ident),
+				sig: format!("func_{}",func.sig.ident),
 				priority,
 			    }),
 			Flag(flag, priority) => {// TODO: add meta-overload of flags vie priorities
@@ -129,7 +129,34 @@ pub fn watch_files(file_names: Vec<&str>) {
 		},
 		syn::Item::Impl(impl_block) => {
 		    match get_priority(&impl_block.attrs) {
-			Flag(_, _) => panic!("Can't yet lay flags on impls"),
+			Flag(flag, priority) => {
+			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
+				Path(path) => path,
+				_ => continue,
+			    }.path.segments[0].ident.to_string();
+			    
+			    for item in impl_block.items {
+				match item {
+				    Method(method) =>
+					flags.push(Flagger{
+					    sig: format!("method_{}_{}",
+							  self_type,
+							 &method.sig.ident),
+					    flag: flag.clone(),
+					    priority,
+					}),
+				    Const(constant) =>
+					flags.push(Flagger{
+					    sig: format!("implconst_{}_{}",
+							  self_type,
+							 &constant.ident),
+					    flag: flag.clone(),
+					    priority,
+					}),
+				    _ => continue,
+				}
+			    }
+			},
 			Norm(priority) => {
 			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
 				Path(path) => path,
@@ -140,14 +167,14 @@ pub fn watch_files(file_names: Vec<&str>) {
 				match item {
 				    Method(method) =>
 					overrides.push(Override{
-					    flag: format!("method_{}_{}",
+					    sig: format!("method_{}_{}",
 							  self_type,
 							  &method.sig.ident),
 					    priority,
 					}),
 				    Const(constant) =>
 					overrides.push(Override{
-					    flag: format!("implconst_{}_{}",
+					    sig: format!("implconst_{}_{}",
 							  self_type,
 							  &constant.ident),
 					    priority,
@@ -188,7 +215,7 @@ pub fn watch_files(file_names: Vec<&str>) {
     let mut override_chains: Vec<Vec<Override>> = Vec::new();
     // [[for each priority] for each item]
     for overrider in overrides.into_iter() {
-	if let Some(position) = override_chains.iter().position(|chain| chain[0].flag == overrider.flag) {
+	if let Some(position) = override_chains.iter().position(|chain| chain[0].sig == overrider.sig) {
 	    override_chains[position].push(overrider);
 	} else {
 	    override_chains.push(vec![overrider]);
@@ -199,20 +226,20 @@ pub fn watch_files(file_names: Vec<&str>) {
     for chain in override_chains.iter() {
 	let (i_of_max, _) = chain.iter().enumerate().max_by_key(|x| x.1.priority.abs()).unwrap();
 	for fin in &finals {
-	    if fin == &chain[i_of_max].flag {
+	    if fin == &chain[i_of_max].sig {
 		println!("cargo:rustc-env=__override_final_{}={}", fin, chain[i_of_max].priority+1);
 	    }
 	}
 	for (i, overrider) in chain.iter().enumerate(){
 	    if i_of_max != i {
-		println!("cargo:rustc-cfg=__override_priority_{}_{}", overrider.priority, overrider.flag);
+		println!("cargo:rustc-cfg=__override_priority_{}_{}", overrider.priority, overrider.sig);
 	    }
 	};
     }
     
     // sometimes there's something in fin that's not in override_chains. If so, priority = 0
     for fin in finals.into_iter() {
-	if !override_chains.iter().any(|chain| chain[0].flag == fin) {
+	if !override_chains.iter().any(|chain| chain[0].sig == fin) {
 	    println!("cargo:rustc-env=__override_final_{}={}", fin, 0);
 	}
     }
