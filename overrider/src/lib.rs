@@ -172,36 +172,39 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
 	    let old_ident = &input.sig.ident;
 	    let old_sig = input.sig.clone();
 	    
+	    let args = input.sig.inputs.iter().map(|input| {
+		match input {
+		    syn::FnArg::Typed(t) => {
+			match &*t.pat {
+			    syn::Pat::Ident(p) => &p.ident,
+			    _ => panic!("I don't know what this is"),
+			}
+		    },
+		    _ => panic!("Can't take untyped args"), // TODO: compiler error
+		}
+	    }).collect::<Vec<&Ident>>();
+	    
 	    let if_branches = flags.split(" ").map(|flagstr| {
 		let flagext = Ident::new(&format!("__override_flagext_{}_{}",
 						  flagstr, old_ident),
 					 Span::call_site());
 		quote! {
 		    if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
-			#flagext ();
+			#flagext (#(#args),*);
 		    }
 		}
 	    }).collect::<Vec<proc_macro2::TokenStream>>();
 
-	    let flagexts = flags.split(" ")
-		.map(|f| format!("__override_flagext_{}_{}", f, old_ident))
-		.collect::<Vec<String>>();
 	    input.sig.ident = Ident::new(&format!("__override_flagentry_{}",
 						  old_ident),
 					 Span::call_site());
 	    let sigentry = &input.sig.ident;
-	    let typed_args = input.sig.inputs.iter().map(|input| {
-		match input {
-		    syn::FnArg::Typed(t) => t,
-		    _ => panic!("Can't take untyped args"), // TODO: compiler error
-		}
-	    }).collect::<Vec<&syn::PatType>>();
 	    
 	    TokenStream::from(quote! {
 		#(#old_attrs)*
 		#old_sig {
-		    #(#if_branches else)* {
-			#sigentry (#(#typed_args),*);
+		    #(#if_branches else )* {
+			#sigentry (#(#args),*);
 		    }
 		}
 		
