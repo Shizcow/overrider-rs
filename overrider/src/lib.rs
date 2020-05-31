@@ -168,8 +168,47 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
 	    })
 	},
 	Ok(flags) => {
-	    println!("CHANGE DEFAULT FOR FLAG: {:?}", flags); // TODO
-	    TokenStream::new()
+	    let old_attrs = &input.attrs;
+	    let old_ident = &input.sig.ident;
+	    let old_sig = input.sig.clone();
+	    
+	    let if_branches = flags.split(" ").map(|flagstr| {
+		let flagext = Ident::new(&format!("__override_flagext_{}_{}",
+						  flagstr, old_ident),
+					 Span::call_site());
+		quote! {
+		    if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
+			#flagext ();
+		    }
+		}
+	    }).collect::<Vec<proc_macro2::TokenStream>>();
+
+	    let flagexts = flags.split(" ")
+		.map(|f| format!("__override_flagext_{}_{}", f, old_ident))
+		.collect::<Vec<String>>();
+	    input.sig.ident = Ident::new(&format!("__override_flagentry_{}",
+						  old_ident),
+					 Span::call_site());
+	    let sigentry = &input.sig.ident;
+	    let typed_args = input.sig.inputs.iter().map(|input| {
+		match input {
+		    syn::FnArg::Typed(t) => t,
+		    _ => panic!("Can't take untyped args"), // TODO: compiler error
+		}
+	    }).collect::<Vec<&syn::PatType>>();
+	    
+	    TokenStream::from(quote! {
+		#(#old_attrs)*
+		#old_sig {
+		    #(#if_branches else)* {
+			#sigentry (#(#typed_args),*);
+		    }
+		}
+		
+		#[override_default(priority = #priority)]
+		#[inline(always)]
+		#input
+	    })
 	}
     }
 }
@@ -287,7 +326,7 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // 
 					     flag, item.sig.ident),
 				    Span::call_site());
 	return TokenStream::from(quote! {
-	    #[inline]
+	    #[inline(always)]
 	    #item
 	});
     } else {
