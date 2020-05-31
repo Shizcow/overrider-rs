@@ -168,7 +168,7 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
 	    })
 	},
 	Ok(flags) => {
-	    let old_attrs = &input.attrs;
+	    let old_attrs = input.attrs.clone();
 	    let old_ident = &input.sig.ident;
 	    let old_sig = input.sig.clone();
 	    
@@ -199,6 +199,8 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
 						  old_ident),
 					 Span::call_site());
 	    let sigentry = &input.sig.ident;
+
+	    attr_inline(&mut input.attrs);
 	    
 	    TokenStream::from(quote! {
 		#(#old_attrs)*
@@ -208,8 +210,6 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
 		    }
 		}
 		
-		#[override_default(priority = #priority)]
-		#[inline(always)]
 		#input
 	    })
 	}
@@ -226,6 +226,8 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
 	    .to_compile_error().into(),
     }.path.segments[0].ident.to_string();
 
+    let mut additional_items: Vec::<syn::ImplItem> = Vec::new();
+
     // then step over each method, appending override flag to each
     for item in &mut input.items {
 	match item {
@@ -237,7 +239,48 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
 							    self_type,
 							    &method.sig.ident)),
 		    Ok(flags) => {
-			panic!("found flags!")
+			let old_attrs = method.attrs.clone();
+			let old_ident = &method.sig.ident;
+			let old_sig = method.sig.clone();
+			
+			let args = method.sig.inputs.iter().map(|input| {
+			    match input {
+				syn::FnArg::Typed(t) => {
+				    match &*t.pat {
+					syn::Pat::Ident(p) => &p.ident,
+					_ => panic!("I don't know what this is"),
+				    }
+				},
+				_ => panic!("Can't take untyped args"), // TODO: compiler error
+			    }
+			}).collect::<Vec<&Ident>>();
+			
+			let if_branches = flags.split(" ").map(|flagstr| {
+			    let flagext = Ident::new(&format!("__override_flagext_{}_{}",
+							      flagstr, old_ident),
+						     Span::call_site());
+			    quote! {
+				if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
+				    Self::#flagext (#(#args),*);
+				}
+			    }
+			}).collect::<Vec<proc_macro2::TokenStream>>();
+
+			method.sig.ident = Ident::new(&format!("__override_flagentry_{}",
+							       old_ident),
+						      Span::call_site());
+			let sigentry = &method.sig.ident;
+
+			attr_inline(&mut method.attrs);
+
+			additional_items.push(syn::parse2::<syn::ImplItem>(quote! {
+			    #(#old_attrs)*
+			    #old_sig {
+				#(#if_branches else )* {
+				    Self::#sigentry (#(#args),*);
+				}
+			    }
+			}).unwrap());
 		    }
 		},
 	    Const(constant) =>
@@ -258,6 +301,8 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
 		.to_compile_error().into(),
 	}
     }
+    input.items.append(&mut additional_items);
+    
     TokenStream::from(quote! {
 	#input
     })

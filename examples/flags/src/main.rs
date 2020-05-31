@@ -17,7 +17,7 @@ lazy_static::lazy_static! {
             .get_matches()
     };
 }
-/*
+
 // Must provide a default case
 #[default]
 fn foo() {
@@ -26,16 +26,17 @@ fn foo() {
 
 #[override_flag(flag = a)]
 fn foo() {
-    println!("fn changed by a flag");
+    println!("fn   changed by a flag");
 }
 
 #[override_flag(flag = b)]
 fn foo() {
-    println!("fn changed by a different flag");
+    println!("fn   changed by a different flag");
 }
-*/
+
 // syntax for impls is similar
 struct Dummy{}
+
 
 #[default]
 impl Dummy {
@@ -47,12 +48,20 @@ impl Dummy {
 #[override_flag(flag = a)]
 impl Dummy {
     pub fn foo() {
-	println!("Flag overriden impl");
+	println!("impl changed by flag");
+    }
+}
+
+#[override_flag(flag = b)]
+impl Dummy {
+    pub fn foo() {
+	println!("impl changed by a different flag");
     }
 }
 
 
+
 fn main() {
     foo();
-    Dummy::__override_flagext_a_foo();
+    Dummy::foo();
 }
