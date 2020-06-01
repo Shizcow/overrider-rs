@@ -2,7 +2,7 @@ use syn::{Type::Path, ImplItem::{Method, Const}};
 use std::fs::File;
 use std::io::Read;
 
-enum Status {Norm(i32), Flag(String, i32), Final, Empty}
+enum Status {Norm(u32), Flag(String, u32), Final, Empty}
 use Status::*;
 fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
     for attr in attrs { // there's no error checking; overrider main can give richer error messages
@@ -14,7 +14,7 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
 			    && left.path.segments[0].ident.to_string() == "priority" {
 				if let syn::Expr::Lit(lit) = *assign.right {
 				    if let syn::Lit::Int(i) = lit.lit {
-					if let Ok(priority) = i.base10_parse::<i32>() {
+					if let Ok(priority) = i.base10_parse::<u32>() {
 					    return Norm(priority);
 					}
 				    }
@@ -53,7 +53,7 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
 				    };
 				if let (syn::Expr::Path(right1), syn::Expr::Lit(right2)) = (flagarg.1, parg.1) {
 				    if let syn::Lit::Int(right2int) = right2.lit {
-					if let Ok(right2val) = right2int.base10_parse::<i32>() { // TODO u32
+					if let Ok(right2val) = right2int.base10_parse::<u32>() { // TODO u32
 					    return Flag(right1.path.segments[0].ident.to_string(), right2val);
 					}
 				    }
@@ -81,14 +81,14 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
 #[derive(Debug)]
 struct Override {
     pub sig: String,
-    pub priority: i32,
+    pub priority: u32,
 }
 
 #[derive(Debug)]
 struct Flagger {
     pub sig: String,
     pub flag: String,
-    pub priority: i32,
+    pub priority: u32,
 }
 
 pub fn watch_files(file_names: Vec<&str>) {
@@ -224,7 +224,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 
     // print cfgs
     for chain in override_chains.iter() {
-	let (i_of_max, _) = chain.iter().enumerate().max_by_key(|x| x.1.priority.abs()).unwrap();
+	let (i_of_max, _) = chain.iter().enumerate().max_by_key(|x| x.1.priority).unwrap();
 	for fin in &finals {
 	    if fin == &chain[i_of_max].sig {
 		println!("cargo:rustc-env=__override_final_{}={}", fin, chain[i_of_max].priority+1);
@@ -267,7 +267,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 	
 	for flag in flag_chain.into_iter() { // TODO: combine with iter above
 	    let (i_of_max, _) = flag.iter().enumerate()
-		.max_by_key(|x| x.1.priority.abs()).unwrap();
+		.max_by_key(|x| x.1.priority).unwrap();
 	    for (i, p) in flag.into_iter().enumerate() {
 		if i_of_max != i { // TODO: chuck recursive parse in override
 		    println!("cargo:rustc-cfg=__override_priority_{}_flag_{}_{}", p.priority, p.flag, p.sig);

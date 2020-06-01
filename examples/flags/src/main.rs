@@ -44,6 +44,13 @@ impl Dummy {
     }
 }
 
+#[override_default] // flags also work with overriding default
+impl Dummy {
+    pub fn foo() {
+	println!("Overriden default impl");
+    }
+}
+
 #[override_flag(flag = a)]
 impl Dummy {
     pub fn foo() {
@@ -51,7 +58,7 @@ impl Dummy {
     }
 }
 
-#[override_flag(flag = a, priority = 2)] // flags also work with priorities
+#[override_flag(flag = a, priority = 2)] // flags even work with priorities
 impl Dummy {
     pub fn foo() {
 	println!("impl changed by flag with higher priority");

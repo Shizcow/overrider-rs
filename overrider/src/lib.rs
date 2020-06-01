@@ -118,7 +118,7 @@ pub fn override_default(attr: TokenStream, input: TokenStream) -> TokenStream {
 	    if let (syn::Expr::Path(left), syn::Expr::Lit(right)) = (*assign.left, *assign.right) {
 		if left.path.segments[0].ident.to_string() == "priority" {
 		    if let syn::Lit::Int(lit) = right.lit {
-			if let Ok(i) = lit.base10_parse::<i32>() {
+			if let Ok(i) = lit.base10_parse::<u32>() {
 			    i
 			} else {
 			    return quick_error(format!("Could not parse literal"));
@@ -147,7 +147,7 @@ fn quick_error(message: String) -> TokenStream {
     ).to_compile_error().into()
 }
 
-fn attach(input: TokenStream, priority: i32) -> TokenStream { // TODO: do this with traits
+fn attach(input: TokenStream, priority: u32) -> TokenStream { // TODO: do this with traits
     if let Ok(item) = syn::parse::<ItemImpl>(input.clone()) {
 	attach_impl(item, priority)
     } else if let Ok(item) = syn::parse::<ItemFn>(input) {
@@ -157,12 +157,11 @@ fn attach(input: TokenStream, priority: i32) -> TokenStream { // TODO: do this w
     }
 }
 
-fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
+fn attach_function(mut input: ItemFn, priority: u32) -> TokenStream {
+    attr_add(&mut input.attrs,
+	     format!("__override_priority_{}_func_{}", priority, &input.sig.ident));
     match std::env::var(format!("__override_acceptflags_func_{}", &input.sig.ident)) {
 	Err(_) => { // no flags to worry about
-	    attr_add(&mut input.attrs,
-		     format!("__override_priority_{}_func_{}", priority, &input.sig.ident));
-	    
 	    TokenStream::from(quote! {
 		#input
 	    })
@@ -171,18 +170,26 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
 	    let old_attrs = input.attrs.clone();
 	    let old_ident = &input.sig.ident;
 	    let old_sig = input.sig.clone();
-	    
-	    let args = input.sig.inputs.iter().map(|input| {
+
+	    let mut args = Vec::new();
+	    for input in &input.sig.inputs {
 		match input {
 		    syn::FnArg::Typed(t) => {
-			match &*t.pat {
-			    syn::Pat::Ident(p) => &p.ident,
-			    _ => panic!("I don't know what this is"),
+			match t.pat.as_ref() {
+			    syn::Pat::Ident(p) => args.push(&p.ident),
+			    _ => return syn::Error::new(
+				t.span(),
+				format!("I do not know what this is and \
+					 it can't be overriden"))
+				.to_compile_error().into(),
 			}
 		    },
-		    _ => panic!("Can't take untyped args"), // TODO: compiler error
+		    arg => return syn::Error::new(
+				arg.span(),
+				format!("I can only override typed arguments"))
+				.to_compile_error().into(),
 		}
-	    }).collect::<Vec<&Ident>>();
+	    };
 	    
 	    let if_branches = flags.split(" ").map(|flagstr| {
 		let flagext = Ident::new(&format!("__override_flagext_{}_{}",
@@ -216,7 +223,7 @@ fn attach_function(mut input: ItemFn, priority: i32) -> TokenStream {
     }
 }
 
-fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
+fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
     // First, grab the struct name
     let self_type = match input.self_ty.as_ref() {
 	Path(path) => path,
@@ -231,31 +238,37 @@ fn attach_impl(mut input: ItemImpl, priority: i32) -> TokenStream {
     // then step over each method, appending override flag to each
     for item in &mut input.items {
 	match item {
-	    Method(method) =>
-		match std::env::var(format!("__override_acceptflags_method_{}_{}", self_type, &method.sig.ident)) {
-		    Err(_) => // no flags to worry about
-			attr_add(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
+	    Method(method) => {
+		attr_add(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
 							    priority,
-							    self_type,
-							    &method.sig.ident)),
-		    Ok(flags) => {
-			let old_attrs = method.attrs.clone();
-			let old_ident = &method.sig.ident;
-			let old_sig = method.sig.clone();
+						    self_type,
+						    &method.sig.ident));
+		if let Ok(flags) = std::env::var(format!("__override_acceptflags_method_{}_{}", self_type, &method.sig.ident)) {
+		    let old_attrs = method.attrs.clone();
+		    let old_ident = &method.sig.ident;
+		    let old_sig = method.sig.clone();
+
+		    let mut args = Vec::new();
+		    for input in &method.sig.inputs {
+			match input {
+			    syn::FnArg::Typed(t) => {
+				match t.pat.as_ref() {
+				    syn::Pat::Ident(p) => args.push(&p.ident),
+				    _ => return syn::Error::new(
+					t.span(),
+					format!("I do not know what this is and \
+						 it can't be overriden"))
+				.to_compile_error().into(),
+				}
+			    },
+			    arg => return syn::Error::new(
+				arg.span(),
+				format!("I can only override typed arguments"))
+				.to_compile_error().into(),
+			}
+		    };
 			
-			let args = method.sig.inputs.iter().map(|input| {
-			    match input {
-				syn::FnArg::Typed(t) => {
-				    match &*t.pat {
-					syn::Pat::Ident(p) => &p.ident,
-					_ => panic!("I don't know what this is"),
-				    }
-				},
-				_ => panic!("Can't take untyped args"), // TODO: compiler error
-			    }
-			}).collect::<Vec<&Ident>>();
-			
-			let if_branches = flags.split(" ").map(|flagstr| {
+		    let if_branches = flags.split(" ").map(|flagstr| {
 			    let flagext = Ident::new(&format!("__override_flagext_{}_{}",
 							      flagstr, old_ident),
 						     Span::call_site());
@@ -340,13 +353,14 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // 
 		    if left.path.segments[0].ident.to_string() == "flag" {
 			(right.path.segments[0].ident.to_string(), 1)
 		    } else {
-			panic!("arg must be flag");
+			return quick_error(format!("mandatory arguement 'flag' ommited"));
 		    }
 		} else {
-		    panic!("Bad arg form / need flag");
+		    return quick_error(format!("Bad arguement form: left side must be \
+						'flag', right side must be an identifier"));
 		}
 	    } else {
-		panic!("Bad arg");
+		return quick_error(format!("Malformed arguement"));
 	    }
 	} else { // try to parse manually
 	    let attrstr = attr.to_string();
@@ -360,29 +374,32 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // 
 			    } else if left1.path.segments[0].ident.to_string() == "priority" && left2.path.segments[0].ident.to_string() == "flag" {
 				((left2, *arg2.right), (left1, *arg1.right))
 			    } else {
-				panic!("invalid arg 3");
+				return quick_error(format!("Invalid arguement list"));
 			    };
 			if let (syn::Expr::Path(right1), syn::Expr::Lit(right2)) = (flagarg.1, parg.1) {
 			    if let syn::Lit::Int(right2int) = right2.lit {
-				if let Ok(right2val) = right2int.base10_parse::<i32>() { // TODO u32
+				if let Ok(right2val) = right2int.base10_parse::<u32>() { // TODO u32
 				    (right1.path.segments[0].ident.to_string(), right2val)
 				} else {
-				    panic!("wrong type for lit");
+				    return quick_error(format!("Priority must be a positive \
+								integer"));
 				}
 			    } else {
-				panic!("invalid lit");
+				return quick_error(format!("Priority must be a positive \
+							    integer"));
 			    }
 			} else {
-			    panic!("invalid arg 1");
+			    return quick_error(format!("Flag must be an identifier"));
 			}
 		    } else {
-			panic!("nopath");
+			return quick_error(format!("Flag requires an identifier"));
 		    }
 		} else {
-		    panic!("Invalid arg form");
+		    return quick_error(format!("Malformed arguement"));
 		}
 	    } else {
-		panic!("Invalid arg list");
+		return quick_error(format!("Incomplete/badly malformed arguement \
+					    or too many arguements"));
 	    }
 	};
     
@@ -396,12 +413,11 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // 
 }
 
 
-fn flag_function(mut item: ItemFn, priority: i32, flag: String) -> TokenStream {
+fn flag_function(mut item: ItemFn, priority: u32, flag: String) -> TokenStream {
     attr_add(&mut item.attrs,
 	     format!("__override_priority_{}_flag_{}_func_{}",
 		     priority, flag, item.sig.ident));
     attr_inline(&mut item.attrs);
-    //__override_priority_1_flag_change_func_main
     item.sig.ident = Ident::new(&format!("__override_flagext_{}_{}",
 					 flag, item.sig.ident),
 				Span::call_site());
@@ -410,7 +426,7 @@ fn flag_function(mut item: ItemFn, priority: i32, flag: String) -> TokenStream {
     });
 }
 
-fn flag_impl(mut impl_block: ItemImpl, priority: i32, flag: String) -> TokenStream {
+fn flag_impl(mut impl_block: ItemImpl, priority: u32, flag: String) -> TokenStream {
     let self_type = match impl_block.self_ty.as_ref() {
 	Path(path) => path,
 	_ => return quick_error(format!("Could not get Path for impl (should never see this)")),
@@ -427,7 +443,8 @@ fn flag_impl(mut impl_block: ItemImpl, priority: i32, flag: String) -> TokenStre
 					      Span::call_site());
 	    },
 	    Const(_constant) => {
-		panic!("flagging a constant currently envokes undefined behavior");
+		return quick_error(format!("flagging a constant currently envokes undefined \
+					    behavior"));
 	    },
 	    item => return syn::Error::new(
 		item.span(),
