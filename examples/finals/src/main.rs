@@ -19,10 +19,13 @@ fn foo() {
 
 // Now comes final. This intentionally throws a compiler error
 //   with the required priority to make this overload final
+// Uncomment to see this error
+/*
 #[override_final]
 fn foo() {
     println!("Ok this is the last one");
 }
+*/
 
 
 // impls also support final. Here's the setup:
@@ -42,12 +45,15 @@ impl Dummy {
     }
 }
 
+// Again, uncomment to show error
+/*
 #[override_final]
 impl Dummy {
     fn foo(&self) {
 	println!("Final method");
     }
 }
+*/
 
 
 // And here's main, just for show

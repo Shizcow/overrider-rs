@@ -1,6 +1,7 @@
 use syn::{Type::Path, ImplItem::{Method, Const}};
 use std::fs::File;
 use std::io::Read;
+use glob::glob;
 
 enum Status {Norm(u32), Flag(String, u32), Final, Empty}
 use Status::*;
@@ -91,125 +92,131 @@ struct Flagger {
     pub priority: u32,
 }
 
-pub fn watch_files(file_names: Vec<&str>) {
+pub fn watch_files(file_names: Vec<&str>) { // &str supports globbing
 
     // find all overrides in files
     let mut overrides: Vec<Override> = Vec::new();
     let mut finals:    Vec<String>   = Vec::new();
     let mut flags:     Vec<Flagger>  = Vec::new();
-    for file_name in file_names {
-	let mut file = File::open(file_name).expect(&format!("Unable to open file '{}'", file_name));
-	let mut src = String::new(); 
-	file.read_to_string(&mut src).expect(&format!("Unable to read file '{}'", file_name));
+    for file_name in file_names.into_iter()
+	.map(|g| glob(g).expect(&format!("Failed to read glob pattern '{}'", g))).flatten() {
+	    let file_name = match file_name {
+		Ok(file_name) => file_name,
+		Err(err) => panic!("Glob pattern resolution failed: {}", err),
+	    };
+	    
+	    let mut file = File::open(&file_name).expect(&format!("Unable to open file '{}'", file_name.display()));
+	    let mut src = String::new(); 
+	    file.read_to_string(&mut src).expect(&format!("Unable to read file '{}'", file_name.display()));
 
-	let parsed = match syn::parse_file(&src) {
-	    Ok(items) => items,
-	    Err(_) => return, // There's a compiler error. Let rustc take care of it
-	};
-	
-	for item in parsed.items {
-	    match item { // step over everything in the file
-		syn::Item::Fn(func) => {
-		    match get_priority(&func.attrs) {
-			Norm(priority) =>
-			    overrides.push(Override{
-				sig: format!("func_{}",func.sig.ident),
-				priority,
-			    }),
-			Flag(flag, priority) => {// TODO: add meta-overload of flags vie priorities
-			    flags.push(Flagger{
-				sig: format!("func_{}",func.sig.ident),
-				flag,
-				priority,
-			    })}
-			,
-			Final => finals.push(format!("func_{}", func.sig.ident)),
-			Empty => {},
-		    }
-		},
-		syn::Item::Impl(impl_block) => {
-		    match get_priority(&impl_block.attrs) {
-			Flag(flag, priority) => {
-			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
-				Path(path) => path,
-				_ => continue,
-			    }.path.segments[0].ident.to_string();
-			    
-			    for item in impl_block.items {
-				match item {
-				    Method(method) =>
-					flags.push(Flagger{
-					    sig: format!("method_{}_{}",
-							  self_type,
-							 &method.sig.ident),
-					    flag: flag.clone(),
-					    priority,
-					}),
-				    Const(constant) =>
-					flags.push(Flagger{
-					    sig: format!("implconst_{}_{}",
-							  self_type,
-							 &constant.ident),
-					    flag: flag.clone(),
-					    priority,
-					}),
+	    let parsed = match syn::parse_file(&src) {
+		Ok(items) => items,
+		Err(_) => return, // There's a compiler error. Let rustc take care of it
+	    };
+	    
+	    for item in parsed.items {
+		match item { // step over everything in the file
+		    syn::Item::Fn(func) => {
+			match get_priority(&func.attrs) {
+			    Norm(priority) =>
+				overrides.push(Override{
+				    sig: format!("func_{}",func.sig.ident),
+				    priority,
+				}),
+			    Flag(flag, priority) => {// TODO: add meta-overload of flags vie priorities
+				flags.push(Flagger{
+				    sig: format!("func_{}",func.sig.ident),
+				    flag,
+				    priority,
+				})}
+			    ,
+			    Final => finals.push(format!("func_{}", func.sig.ident)),
+			    Empty => {},
+			}
+		    },
+		    syn::Item::Impl(impl_block) => {
+			match get_priority(&impl_block.attrs) {
+			    Flag(flag, priority) => {
+				let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
+				    Path(path) => path,
 				    _ => continue,
+				}.path.segments[0].ident.to_string();
+				
+				for item in impl_block.items {
+				    match item {
+					Method(method) =>
+					    flags.push(Flagger{
+						sig: format!("method_{}_{}",
+							     self_type,
+							     &method.sig.ident),
+						flag: flag.clone(),
+						priority,
+					    }),
+					Const(constant) =>
+					    flags.push(Flagger{
+						sig: format!("implconst_{}_{}",
+							     self_type,
+							     &constant.ident),
+						flag: flag.clone(),
+						priority,
+					    }),
+					_ => continue,
+				    }
 				}
-			    }
-			},
-			Norm(priority) => {
-			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
-				Path(path) => path,
-				_ => continue,
-			    }.path.segments[0].ident.to_string();
-			    
-			    for item in impl_block.items {
-				match item {
-				    Method(method) =>
-					overrides.push(Override{
-					    sig: format!("method_{}_{}",
-							  self_type,
-							  &method.sig.ident),
-					    priority,
-					}),
-				    Const(constant) =>
-					overrides.push(Override{
-					    sig: format!("implconst_{}_{}",
-							  self_type,
-							  &constant.ident),
-					    priority,
-					}),
+			    },
+			    Norm(priority) => {
+				let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
+				    Path(path) => path,
 				    _ => continue,
+				}.path.segments[0].ident.to_string();
+				
+				for item in impl_block.items {
+				    match item {
+					Method(method) =>
+					    overrides.push(Override{
+						sig: format!("method_{}_{}",
+							     self_type,
+							     &method.sig.ident),
+						priority,
+					    }),
+					Const(constant) =>
+					    overrides.push(Override{
+						sig: format!("implconst_{}_{}",
+							     self_type,
+							     &constant.ident),
+						priority,
+					    }),
+					_ => continue,
+				    }
 				}
-			    }
-			},
-			Final => {
-			    let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
-				Path(path) => path,
-				_ => continue,
-			    }.path.segments[0].ident.to_string();
-			    
-			    for item in impl_block.items {
-				match item {
-				    Method(method) => 
-					finals.push(format!("method_{}_{}",
-							    self_type,
-							    &method.sig.ident)),
-				    Const(constant) =>
-					finals.push(format!("implconst_{}_{}",
-							    self_type,
-							    &constant.ident)),
+			    },
+			    Final => {
+				let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
+				    Path(path) => path,
 				    _ => continue,
+				}.path.segments[0].ident.to_string();
+				
+				for item in impl_block.items {
+				    match item {
+					Method(method) => 
+					    finals.push(format!("method_{}_{}",
+								self_type,
+								&method.sig.ident)),
+					Const(constant) =>
+					    finals.push(format!("implconst_{}_{}",
+								self_type,
+								&constant.ident)),
+					_ => continue,
+				    }
 				}
-			    }
-			},
-			Empty => {},
-		    }
-		},
-		_ => {} // can't parse everything yet
+			    },
+			    Empty => {},
+			}
+		    },
+		    _ => {} // can't parse everything yet
+		}
 	    }
 	}
-    }
 
     // group them into like targets
     let mut override_chains: Vec<Vec<Override>> = Vec::new();

@@ -1,6 +1,6 @@
 fn main() {
     // Watch the following files for override attrs
-    overrider_build::watch_files(vec!["src/main.rs"]);
+    overrider_build::watch_files(vec!["src/*.rs"]);
 
     /*
      * NOTE:

@@ -9,4 +9,4 @@ build = "build.rs"
 overrider = "~0.3"
 
 [build-dependencies]
-overrider_build = "~0.3"
+overrider_build = {path = "../../overrider_build"}
