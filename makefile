@@ -11,4 +11,5 @@ docs:
 
 # Publishes everything to crates.io
 publish:
-	@echo "NYI"
+	cd overrider && cargo publish
+	cd overrider_build && cargo publish
