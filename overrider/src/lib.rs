@@ -262,7 +262,7 @@ pub fn default(attr: TokenStream, input: TokenStream) -> TokenStream {
 /// ```
 /// #[override_default]
 /// fn main() {
-///     println!("I won't run);
+///     println!("I won't run");
 /// }
 /// 
 /// #[override_default(priority = 2)]

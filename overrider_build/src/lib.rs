@@ -1,3 +1,14 @@
+//! `overrider_build` is the sister crate to `overrider`, providing the build-time
+//! bridge to allow intelligent conditional compilation.
+//! 
+//! ## Build example
+//! `overrider_build` operates on the `watch_files` function:
+//! ```
+//! fn main() {
+//!     overrider_build::watch_files(vec!["src/main.rs"]);
+//! }
+//! ```
+
 use syn::{Type::Path, ImplItem::{Method, Const}};
 use std::fs::File;
 use std::io::Read;
@@ -92,7 +103,18 @@ struct Flagger {
     pub priority: u32,
 }
 
-pub fn watch_files(file_names: Vec<&str>) { // &str supports globbing
+/// Scans a vector of files, constructing and handling the Cargo config flags that interface
+/// with `overrider`.
+///
+/// ## A word of warning
+/// It's important to note: **only call `watch_files` once**. Calling it multiple times
+/// envokes undefined behavior, and will probably not work properly.
+///
+/// ## Syntax
+/// `watch_files` takes a single arguement: `file_names`. This is a vector of str
+/// references, who point to file strings.  
+/// **Globbing is supported**
+pub fn watch_files(file_names: Vec<&str>) {
 
     // find all overrides in files
     let mut overrides: Vec<Override> = Vec::new();
