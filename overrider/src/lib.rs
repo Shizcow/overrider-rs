@@ -1,22 +1,135 @@
-use syn::{parse::Nothing, spanned::Spanned, ImplItem::{Method, Const}, Type::Path, ItemFn, ItemImpl,
-	  DeriveInput, Ident, Attribute};
+//! `overrider` is a crate for making dynamic compilation easier.
+//! 
+//! ## About
+//! `overrider` aims to bring the `override` keyword of some other programming languages,
+//! such as Java and Python, to Rust. With this crate, a base implimentation of a function,
+//! method, or other item can be defined and then later overriden. All of this happens at
+//! compilation time.  
+//! 
+//! `overrider` also allows for defining `flags`. By parsing flags with `clap` in a
+//! `lazy_static`, highly efficient switching of functionality due to input flags
+//! can be achieved.
+//! 
+//! 
+//! ## Quick Example
+//! The following code shows how `overrider` is used in `src` file:
+//! ```
+//! use overrider::*;
+//! 
+//! #[default]
+//! fn main() {
+//!     println!("This is the base implimentation");
+//! }
+//! 
+//! #[override_default]
+//! fn main() {
+//!     println!("This is the overriden implimentation");
+//! }
+//! ```
+//! Easy as that. If the second implimentation is included, the output changes.  
+//! 
+//! How about with flags?
+//! ```
+//! use overrider::*;
+//! use clap::{Arg, ArgMatches, App};
+//! use lazy_static::lazy_static;
+//! 
+//! lazy_static! {
+//!     static ref CLAP_FLAGS: ArgMatches<'static> = {
+//! 	App::new("Overrider example - flag")
+//!             .arg(Arg::with_name("change").long("change"))
+//!             .get_matches()
+//!     };
+//! }
+//! 
+//! #[default]
+//! fn main() {
+//!     println!("Nothing to see here");
+//! }
+//!
+//! #[override_flag(flag = change)]
+//! fn main() {
+//!     println!("I'll be printed if you call this program with --change");
+//! }
+//! ```
+//! 
+//! ## Why not traits?
+//! Rust has a powerful trait system which allows somewhat similar functionality.
+//! However, it does not allow multiple, concurrent definitions without conflict.  
+//! Additionally, traits do not have built in support for flags.
+//!
+//! 
+//! ## Impl
+//! Due to limitations of `proc_macro`, all `overrider` flags __must__ be attached to
+//! the ouside of an `impl` block, __not__ the inside.  
+//! The following is correct:
+//! ```
+//! #[default]
+//! impl Foo {
+//!     fn bar(){}
+//! }
+//! ```
+//! The following is __not__ correct;
+//! ```
+//! impl Foo {
+//!     #[default]
+//!     fn bar(){}
+//! }
+//! ```
+//! Currently, `overrider` allows for the following items inside an `impl` block to
+//! be manipulated:
+//! - `fn` (methods)
+//! - `const`ants
+//! 
+//! 
+//! ## Building
+//! Because of limitations in `proc_macro`, `overrider` **will not work** without
+//! it's sister crate `overrider_build`. This is because `overrider_build` parses
+//! Rust files, supplying the `rustc` configuration flags nessicary for conditional
+//! compilation. For the above files, placing this code in `build.rs` will do the trick:
+//! ```
+//! fn main() {
+//!     overrider_build::watch_files(vec!["src/main.rs"]);
+//! }
+//! ```
+//! For more information, see the `overrider_build` documentation.
+//! 
+//! 
+//! ## More examples
+//! Additional examples, verified to work, can be seen
+//! [online](https://github.com/Shizcow/overrider-rs/tree/master/examples).  
+//! Try cloning the repository and running examples with `cargo run -p EXAMPLE_NAME`
+
+
+use syn::{parse::Nothing, spanned::Spanned, ImplItem::{Method, Const}, Type::Path,
+	  ItemFn, ItemImpl, DeriveInput, Ident, Attribute};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 
+/// Throw a compiler error to help ensure this item gets compiled
+///
+/// Because `overrider` is all about modifying functionality, **this will not compile**.
+/// Instead, A compiler error will emit the priority required to ensure this item is
+/// included in the final compilation.
+///
+/// ## Syntax
+/// Simply add `#[override_final]` to a `fn` or `impl` block.
 #[proc_macro_attribute]
 pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
     syn::parse_macro_input!(attr as Nothing); // I take no args
     if let Ok(impl_block) = syn::parse::<ItemImpl>(input.clone()) {
 	let self_type = match impl_block.self_ty.as_ref() { // TODO function
 	    Path(path) => path,
-	    _ => return quick_error(format!("Could not get Path for impl (should never see this)")),
+	    _ => return quick_error(format!("Could not get Path for impl \
+					     (should never see this)")),
 	}.path.segments[0].ident.to_string();
 	match impl_block.items.into_iter().fold(None, |acc, item| {
 	    let new_error = match item {
 		Method(method) => {
 		    let priority_lesser = 
-			std::env::var(format!("__override_final_method_{}_{}", self_type, &method.sig.ident.to_string()))
+			std::env::var(format!("__override_final_method_{}_{}", self_type,
+					      &method.sig.ident.to_string()))
 			.expect("Failed covering final. \
 				 Did you configure your build script to watch this file?");
 		    syn::Error::new(
@@ -25,22 +138,26 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 			    "0" => 
 				format!("Method requested final. \
 					 Replace #[override_final] with #[default] or higher \
-					 on a (seperate if required) impl block to make top level."),
+					 on a (seperate if required) impl block to make top \
+					 level."),
 			    "1" => 
 				format!("Method requested final. \
-					 Replace #[override_final] with #[override_default] or higher  \
-					 on a (seperate if required) impl block to make top level."),
+					 Replace #[override_final] with #[override_default] \
+					 or higher on a (seperate if required) impl block to \
+make top level."),
 			    priority_lesser => 
 				format!("Method requested final. \
-					 Replace #[override_final] with #[override_default(priority = {})] \
-					 or higher on a (seperate if required) impl block to make top level.",
+					 Replace #[override_final] with \
+					 #[override_default(priority = {})] or higher on a \
+					 (seperate if required) impl block to make top level.",
 					priority_lesser),
 			}
 		    )
 		},
 		Const(constant) => {
 		    let priority_lesser = 
-			std::env::var(format!("__override_final_implconst_{}_{}", self_type, &constant.ident.to_string()))
+			std::env::var(format!("__override_final_implconst_{}_{}",
+					      self_type, &constant.ident.to_string()))
 			.expect("Failed covering final. \
 				 Did you configure your build script to watch this file?");
 		    syn::Error::new(
@@ -48,16 +165,19 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 			match priority_lesser.as_str() {
 			    "0" => 
 				format!("Impl constant requested final. \
-					 Replace #[override_final] with #[default] or higher  \
-					 on a (seperate if required) impl block to make top level."),
+					 Replace #[override_final] with #[default] or higher \
+					 on a (seperate if required) impl block to make top \
+					 level."),
 			    "1" => 
 				format!("Impl constant requested final. \
-					 Replace #[override_final] with #[override_default] or higher  \
-					 on a (seperate if required) impl block to make top level."),
+					 Replace #[override_final] with #[override_default] \
+					 or higher on a (seperate if required) impl block \
+					 to make top level."),
 			    priority_lesser => 
 				format!("Impl constant requested final. \
-					 Replace #[override_final] with #[override_default(priority = {})] \
-					 or higher on a (seperate if required) impl block to make top level.",
+					 Replace #[override_final] with \
+					 #[override_default(priority = {})] or higher on a \
+					 (seperate if required) impl block to make top level.",
 					priority_lesser),
 			}
 		    )
@@ -74,7 +194,7 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 	    }
 	}) {
 	    Some(errors) => errors.to_compile_error().into(),
-	    None => input, // this will only happen if user tries to finalize an empty impl block
+	    None => input, // will only happen if user tries to finalize an empty impl block
 	}
     } else if let Ok(item) = syn::parse::<ItemFn>(input) {
 	let priority_lesser = 
@@ -86,7 +206,8 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 	    match priority_lesser.as_str() {
 		"0" => 
 		    format!("Function requested final. \
-			     Replace #[override_final] with #[default] or higher to make top level."),
+			     Replace #[override_final] with #[default] or higher \
+			     to make top level."),
 		"1" => 
 		    format!("Function requested final. \
 			     Replace #[override_final] with #[override_default] \
@@ -103,12 +224,55 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
     }
 }
 
-#[proc_macro_attribute] // shorthand for #[override_default(priority = 0)]
+/// Marks an item as the base implimentation
+///
+/// Attaching this attribute to a `fn` or `impl` block enables it to be overriden.
+///
+/// `#[default]` is short hand for `#[override_default(priority = 0)]`
+///
+/// ### Syntax
+/// Here's an example showing how to flag a function as default:
+/// ```
+/// #[default]
+/// fn main() {
+///     println!("Default");
+/// }
+/// ```
+/// It's that easy.
+#[proc_macro_attribute]
 pub fn default(attr: TokenStream, input: TokenStream) -> TokenStream {
     syn::parse_macro_input!(attr as Nothing); // I take no args
     attach(input, 0)
 }
 
+/// Replaces (overrides) base implimentation
+///
+/// Attaching this attribute to `fn` or `impl` block overrides the implimentation
+/// defined with `#[default]`. `overrider` will intelligently determine which implimentation
+/// should be compiled in.
+///
+/// `#[override_default]` accepts a single, optinal arguement: `priority`. By setting
+/// the priority of a particular implimentation higher, `overrider` will prefer it over
+/// any other implimentation, even other `#[override_default]` implientations, so long
+/// as it holds the highest priority.
+///
+/// ### Syntax
+/// Here's an example showing how to override a function, and then override it a second
+/// time with a higher priority.
+/// ```
+/// #[override_default]
+/// fn main() {
+///     println!("I won't run);
+/// }
+/// 
+/// #[override_default(priority = 2)]
+/// fn main() {
+///     println!("I will run");
+/// }
+/// ```
+/// `priority` can be any positive integer. Having two implimentations with the same
+/// priority invokes undefined behavior. To help avoid this, see
+/// [`#[override_final]`](attr.override_default.html)
 #[proc_macro_attribute]
 pub fn override_default(attr: TokenStream, input: TokenStream) -> TokenStream {
     let priority = {
@@ -243,7 +407,8 @@ fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
 							    priority,
 						    self_type,
 						    &method.sig.ident));
-		if let Ok(flags) = std::env::var(format!("__override_acceptflags_method_{}_{}", self_type, &method.sig.ident)) {
+		if let Ok(flags) = std::env::var(format!("__override_acceptflags_method_{}_{}",
+							 self_type, &method.sig.ident)) {
 		    let old_attrs = method.attrs.clone();
 		    let old_ident = &method.sig.ident;
 		    let old_sig = method.sig.clone();
@@ -299,10 +464,11 @@ fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
 	    Const(constant) =>
 		match std::env::var(format!("__override_acceptflags_method_{}", self_type)) {
 		    Err(_) => // no flags to worry about
-			attr_add(&mut constant.attrs, format!("__override_priority_{}_implconst_{}_{}",
-							      priority,
-							      self_type,
-							      &constant.ident)),
+			attr_add(&mut constant.attrs,
+				 format!("__override_priority_{}_implconst_{}_{}",
+					 priority,
+					 self_type,
+					 &constant.ident)),
 		    Ok(_) => return syn::Error::new(
 			item.span(),
 			format!("Laying flags on const currently envokes undefined behavior"))
@@ -310,7 +476,8 @@ fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
 		},
 	    item => return syn::Error::new(
 		item.span(),
-		format!("I can't overload anything other than methods/consts in an impl block yet"))
+		format!("I can't overload anything other than methods/consts \
+			 in an impl block yet"))
 		.to_compile_error().into(),
 	}
     }
@@ -342,8 +509,40 @@ fn attr_inline(attrs: &mut Vec<Attribute>) {
 	).unwrap().attrs.swap_remove(0));
 }
 
+/// Override a base implimentation, but only when runtime is called with certain flags
+///
+/// Attaching this attribute to a `fn` or `impl` block enables it to be overriden at runtime
+/// depending on what flags are passed to the executable. Flags require `lazy_static` and
+/// `clap` to work properly. The expected format is as follows:
+/// ```
+/// lazy_static! {
+///     static ref CLAP_FLAGS: ArgMatches<'static> = {
+/// 	App::new("Overrider example - flag")
+///             .arg(Arg::with_name("change").long("change"))
+///             .get_matches()
+///     };
+/// }
+/// ```
+/// `overrider` expects this format. `CLAP_FLAGS` must be a `clap::ArgMatches` object,
+/// and it must be done through `lazy_static`. This object must be referenced consistantly,
+/// so if work is spread across multiple files, the single `CLAP_FLAGS` instant must be
+/// imported. `overrider` expects `CLAP_FLAGS` in the local namespace.
+/// It's a bit annoying, but it offers unparalleled performance and ease of use
+/// after the setup stage.
+///
+/// ## Syntax
+/// After the `CLAP_FLAGS` definition mentioned above, the `#[override_flag]` attribute can
+/// be attached to an item. **A `#[default]` implimentation is required**. This is so the item
+/// is not left undefined if no flags are passed.
+///
+/// `override_flag` takes two arguements:
+/// - flag
+/// - priority  
+/// Priority allows for overriding a previous flag definition. The full syntax is as follows:  
+/// `#[override_flag(flag = FLAGNAME, priority = n)]`, where `FLAGNAME` is a UTF8 string
+/// containing no spaces, and `n` is a positive integer.
 #[proc_macro_attribute]
-pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream { // TODO: default_flag
+pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream {
     // parse 2 arguements (flag = x, priority = y)
     // TODO check =, +=, -= etc chars
     let (flag, priority) = 
@@ -448,7 +647,8 @@ fn flag_impl(mut impl_block: ItemImpl, priority: u32, flag: String) -> TokenStre
 	    },
 	    item => return syn::Error::new(
 		item.span(),
-		format!("I can't overload anything other than methods/consts in an impl block yet"))
+		format!("I can't overload anything other than methods/consts in an impl \
+			 block yet"))
 		.to_compile_error().into(),
 	}
     }
