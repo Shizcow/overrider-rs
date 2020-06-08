@@ -144,7 +144,7 @@ pub fn override_final(attr: TokenStream, input: TokenStream)-> TokenStream {
 				format!("Method requested final. \
 					 Replace #[override_final] with #[override_default] \
 					 or higher on a (seperate if required) impl block to \
-make top level."),
+					 make top level."),
 			    priority_lesser => 
 				format!("Method requested final. \
 					 Replace #[override_final] with \
@@ -348,10 +348,12 @@ fn attach_function(mut input: ItemFn, priority: u32) -> TokenStream {
 				.to_compile_error().into(),
 			}
 		    },
-		    arg => return syn::Error::new(
+		    arg => {
+			return syn::Error::new(
 				arg.span(),
 				format!("I can only override typed arguments"))
-				.to_compile_error().into(),
+			    .to_compile_error().into()
+		    },
 		}
 	    };
 	    
@@ -361,7 +363,7 @@ fn attach_function(mut input: ItemFn, priority: u32) -> TokenStream {
 					 Span::call_site());
 		quote! {
 		    if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
-			#flagext (#(#args),*);
+			#flagext (#(#args),*)
 		    }
 		}
 	    }).collect::<Vec<proc_macro2::TokenStream>>();
@@ -377,7 +379,7 @@ fn attach_function(mut input: ItemFn, priority: u32) -> TokenStream {
 		#(#old_attrs)*
 		#old_sig {
 		    #(#if_branches else )* {
-			#sigentry (#(#args),*);
+			#sigentry (#(#args),*)
 		    }
 		}
 		
@@ -414,6 +416,7 @@ fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
 		    let old_sig = method.sig.clone();
 
 		    let mut args = Vec::new();
+		    let mut receiver = false;
 		    for input in &method.sig.inputs {
 			match input {
 			    syn::FnArg::Typed(t) => {
@@ -426,41 +429,59 @@ fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
 				.to_compile_error().into(),
 				}
 			    },
-			    arg => return syn::Error::new(
-				arg.span(),
-				format!("I can only override typed arguments"))
-				.to_compile_error().into(),
+			    syn::FnArg::Receiver(_) => {
+				receiver = true;
+			    },
 			}
 		    };
-			
+		    
 		    let if_branches = flags.split(" ").map(|flagstr| {
-			    let flagext = Ident::new(&format!("__override_flagext_{}_{}",
-							      flagstr, old_ident),
-						     Span::call_site());
+			let flagext = Ident::new(&format!("__override_flagext_{}_{}",
+							  flagstr, old_ident),
+						 Span::call_site());
+			if receiver {
 			    quote! {
 				if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
-				    Self::#flagext (#(#args),*);
+				    self.#flagext (#(#args),*)
 				}
 			    }
-			}).collect::<Vec<proc_macro2::TokenStream>>();
-
-			method.sig.ident = Ident::new(&format!("__override_flagentry_{}",
-							       old_ident),
-						      Span::call_site());
-			let sigentry = &method.sig.ident;
-
-			attr_inline(&mut method.attrs);
-
-			additional_items.push(syn::parse2::<syn::ImplItem>(quote! {
-			    #(#old_attrs)*
-			    #old_sig {
-				#(#if_branches else )* {
-				    Self::#sigentry (#(#args),*);
+			} else {
+			    quote! {
+				if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
+				    Self::#flagext (#(#args),*)
 				}
 			    }
-			}).unwrap());
+			}
+		    }).collect::<Vec<proc_macro2::TokenStream>>();
+
+		    method.sig.ident = Ident::new(&format!("__override_flagentry_{}",
+							   old_ident),
+						  Span::call_site());
+		    let sigentry = &method.sig.ident;
+
+		    attr_inline(&mut method.attrs);
+
+		    if receiver {
+			    additional_items.push(syn::parse2::<syn::ImplItem>(quote! {
+				#(#old_attrs)*
+				#old_sig {
+				    #(#if_branches else )* {
+					self.#sigentry (#(#args),*)
+				    }
+				}
+			    }).unwrap());
+		    } else {
+			    additional_items.push(syn::parse2::<syn::ImplItem>(quote! {
+				#(#old_attrs)*
+				#old_sig {
+				    #(#if_branches else )* {
+					Self::#sigentry (#(#args),*)
+				    }
+				}
+			    }).unwrap());
 		    }
-		},
+		}
+	    },
 	    Const(constant) =>
 		match std::env::var(format!("__override_acceptflags_method_{}", self_type)) {
 		    Err(_) => // no flags to worry about
