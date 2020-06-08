@@ -6,7 +6,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-overrider = "^0.5.0"
+overrider = "^0.6.1"
 clap = "2.33.1"
 lazy_static = "1.4.0"
 

@@ -461,25 +461,25 @@ fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
 
 		    attr_inline(&mut method.attrs);
 
-		    if receiver {
-			    additional_items.push(syn::parse2::<syn::ImplItem>(quote! {
-				#(#old_attrs)*
-				#old_sig {
-				    #(#if_branches else )* {
-					self.#sigentry (#(#args),*)
-				    }
-				}
-			    }).unwrap());
+		    let self_tok: proc_macro2::TokenStream = if receiver {
+			"self.".parse::<TokenStream>()
 		    } else {
-			    additional_items.push(syn::parse2::<syn::ImplItem>(quote! {
-				#(#old_attrs)*
-				#old_sig {
-				    #(#if_branches else )* {
-					Self::#sigentry (#(#args),*)
-				    }
-				}
-			    }).unwrap());
-		    }
+			"Self::".parse::<TokenStream>()
+		    }.unwrap().into();
+		    
+		    let vis_tok: proc_macro2::TokenStream = match method.vis {
+			syn::Visibility::Public(_) => "pub".parse::<TokenStream>(),
+			_                          => "".parse::<TokenStream>(),
+		    }.unwrap().into();
+
+		    additional_items.push(syn::parse2::<syn::ImplItem>(quote! {
+			#(#old_attrs)*
+			#vis_tok #old_sig {
+			    #(#if_branches else )* {
+				#self_tok #sigentry (#(#args),*)
+			    }
+			}
+		    }).unwrap());
 		}
 	    },
 	    Const(constant) =>

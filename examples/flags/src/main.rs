@@ -39,28 +39,28 @@ struct Dummy{}
 
 #[default]
 impl Dummy {
-    pub fn foo() {
+    pub fn foo(&self) {
 	println!("Default impl");
     }
 }
 
 #[override_default] // flags also work with overriding default
 impl Dummy {
-    pub fn foo() {
+    pub fn foo(&self) {
 	println!("Overriden default impl");
     }
 }
 
 #[override_flag(flag = a)]
 impl Dummy {
-    pub fn foo() {
+    pub fn foo(&self) {
 	println!("impl changed by flag");
     }
 }
 
 #[override_flag(flag = a, priority = 2)] // flags even work with priorities
 impl Dummy {
-    pub fn foo() {
+    pub fn foo(&self) {
 	println!("impl changed by flag with higher priority");
     }
 }
@@ -69,5 +69,6 @@ impl Dummy {
 
 fn main() {
     foo();
-    Dummy::foo();
+    let dummy = Dummy{};
+    dummy.foo();
 }
