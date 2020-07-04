@@ -1,0 +1,13 @@
+[package]
+name = "primary"
+version = "0.1.0"
+authors = ["Shizcow <pohl.devin@gmail.com>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+overrider = "0.6.1"
+secondary_lib = { path = "../secondary" }
+
+[build-dependencies]
+overrider_build = "0.5.1"

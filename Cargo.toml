@@ -8,4 +8,5 @@ members = [
     "examples/priorities",
     "examples/finals",
     "examples/flags",
+    "examples/library",
 ]

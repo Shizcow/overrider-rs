@@ -1,0 +1,9 @@
+[package]
+name = "secondary_lib"
+version = "0.1.0"
+authors = ["Shizcow <pohl.devin@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+# Because we aren't defining anything here, overrider_build is not required
+overrider = "0.6.1"
