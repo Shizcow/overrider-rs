@@ -35,4 +35,4 @@ and `Cargo.toml` to make sure all functions are included.
 If you've made it through all these exercies and like this crate, check out
 [proc_use](https://github.com/Shizcow/proc_use/). Combining these two crates
 together allows for some seriously powerful solutions, where entire sets of
-plugins can automatically be compiled in or out at runtime.
+plugins can automatically be compiled in or out at buildtime.
