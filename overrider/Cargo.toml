@@ -1,6 +1,6 @@
 [package]
 name = "overrider"
-version = "0.6.1"
+version = "0.7.0"
 authors = ["Shizcow <pohl.devin@gmail.com>"]
 edition = "2018"
 license = "GPL-2.0+"

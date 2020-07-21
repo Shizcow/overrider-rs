@@ -52,6 +52,34 @@
 //!     println!("I'll be printed if you call this program with --change");
 //! }
 //! ```
+//!
+//! Flags can also be inverted if you want it to override the basic functionality,
+//! but be disabled on a flag input. For example
+//! ```use overrider::*;
+//! use clap::{Arg, ArgMatches, App};
+//! 
+//! lazy_static::lazy_static! {
+//!     static ref CLAP_FLAGS: ArgMatches<'static> = {
+//! 	App::new("Overrider example - flag")
+//!             .version(env!("CARGO_PKG_VERSION"))
+//!             .arg(Arg::with_name("disable")
+//!                  .long("disable"))
+//!             .get_matches()
+//!     };
+//! }
+//! 
+//! #[default]
+//! fn main() {
+//!     println!("This is the old default");
+//! }
+//! 
+//! #[override_flag(flag = disable, invert = true)]
+//! fn main() {
+//!     println!("This is the new default, pass --disable to turn off");
+//! }```
+//! ### CAUTION
+//! The invert flag causes undefined behavior when multiple override points for the same
+//! item exists. 
 //! 
 //! ## Why not traits?
 //! Rust has a powerful trait system which allows somewhat similar functionality.
