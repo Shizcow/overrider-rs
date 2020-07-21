@@ -330,11 +330,15 @@ fn attach_function(mut input: ItemFn, priority: u32) -> TokenStream {
 		#input
 	    })
 	},
-	Ok(flags) => {
+	Ok(flagstrs) => {
+	    let flags = flagstrs.split(" ").map(|f| {
+		let v = f.split("_").collect::<Vec<&str>>();
+		(v[0], v[1])
+	    }).collect::<Vec<(&str, &str)>>();
 	    let old_attrs = input.attrs.clone();
 	    let old_ident = &input.sig.ident;
 	    let old_sig = input.sig.clone();
-
+	    
 	    let mut args = Vec::new();
 	    for input in &input.sig.inputs {
 		match input {
@@ -357,13 +361,21 @@ fn attach_function(mut input: ItemFn, priority: u32) -> TokenStream {
 		}
 	    };
 	    
-	    let if_branches = flags.split(" ").map(|flagstr| {
+	    let if_branches = flags.into_iter().map(|(modifiers, flagstr)| {
 		let flagext = Ident::new(&format!("__override_flagext_{}_{}",
 						  flagstr, old_ident),
 					 Span::call_site());
-		quote! {
-		    if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
-			#flagext (#(#args),*)
+		if modifiers.find("i").is_some() {
+		    quote! {
+			if CLAP_FLAGS.occurrences_of(#flagstr) == 0 {
+			    #flagext (#(#args),*)
+			}
+		    }
+		} else {
+		    quote! {
+			if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
+			    #flagext (#(#args),*)
+			}
 		    }
 		}
 	    }).collect::<Vec<proc_macro2::TokenStream>>();
@@ -406,11 +418,15 @@ fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
 	match item {
 	    Method(method) => {
 		attr_add(&mut method.attrs, format!("__override_priority_{}_method_{}_{}",
-							    priority,
+						    priority,
 						    self_type,
 						    &method.sig.ident));
-		if let Ok(flags) = std::env::var(format!("__override_acceptflags_method_{}_{}",
-							 self_type, &method.sig.ident)) {
+		if let Ok(flagstrs) = std::env::var(format!("__override_acceptflags_method_{}_{}",
+							    self_type, &method.sig.ident)) {
+		    let flags = flagstrs.split(" ").map(|f| {
+			let v = f.split("_").collect::<Vec<&str>>();
+			(v[0], v[1])
+		    }).collect::<Vec<(&str, &str)>>();
 		    let old_attrs = method.attrs.clone();
 		    let old_ident = &method.sig.ident;
 		    let old_sig = method.sig.clone();
@@ -435,20 +451,36 @@ fn attach_impl(mut input: ItemImpl, priority: u32) -> TokenStream {
 			}
 		    };
 		    
-		    let if_branches = flags.split(" ").map(|flagstr| {
+		    let if_branches = flags.into_iter().map(|(modifiers, flagstr)| {
 			let flagext = Ident::new(&format!("__override_flagext_{}_{}",
 							  flagstr, old_ident),
 						 Span::call_site());
 			if receiver {
-			    quote! {
-				if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
-				    self.#flagext (#(#args),*)
+			    if modifiers.find("i").is_some() {
+				quote! {
+				    if CLAP_FLAGS.occurrences_of(#flagstr) == 0 {
+					self.#flagext (#(#args),*)
+				    }
+				}
+			    } else {
+				quote! {
+				    if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
+					self.#flagext (#(#args),*)
+				    }
 				}
 			    }
 			} else {
-			    quote! {
-				if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
-				    Self::#flagext (#(#args),*)
+			    if modifiers.find("i").is_some() {
+				quote! {
+				    if CLAP_FLAGS.occurrences_of(#flagstr) == 0 {
+					Self::#flagext (#(#args),*)
+				    }
+				}
+			    } else {
+				quote! {
+				    if CLAP_FLAGS.occurrences_of(#flagstr) > 0 {
+					Self::#flagext (#(#args),*)
+				    }
 				}
 			    }
 			}

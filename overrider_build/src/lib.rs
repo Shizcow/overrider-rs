@@ -14,7 +14,7 @@ use std::fs::File;
 use std::io::Read;
 use glob::glob;
 
-enum Status {Norm(u32), Flag(String, u32), Final, Empty}
+enum Status {Norm(u32), Flag(String, u32, bool), Final, Empty}
 use Status::*;
 fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
     for attr in attrs { // there's no error checking; overrider main can give richer error messages
@@ -59,7 +59,7 @@ fn get_priority(attrs: &Vec<syn::Attribute>) -> Status {
 		if flag.is_none() {
 		    return Empty;
 		}
-		return Flag(flag.unwrap().to_string(), priority);
+		return Flag(flag.unwrap().to_string(), priority, invert);
 	    }
 	} else if attr.path.segments[0].ident.to_string() == "default" {
 	    if attr.tokens.is_empty() {
@@ -130,10 +130,14 @@ pub fn watch_files(file_names: Vec<&str>) {
 				    sig: format!("func_{}",func.sig.ident),
 				    priority,
 				}),
-			    Flag(flag, priority) => {// TODO: add meta-overload of flags vie priorities
+			    Flag(flag, priority, invert) => {
 				flags.push(Flagger{
 				    sig: format!("func_{}",func.sig.ident),
-				    flag,
+				    flag: if invert {
+					format!("i_{}", flag)
+				    } else {
+					format!("_{}", flag)
+				    },
 				    priority,
 				})}
 			    ,
@@ -143,7 +147,7 @@ pub fn watch_files(file_names: Vec<&str>) {
 		    },
 		    syn::Item::Impl(impl_block) => {
 			match get_priority(&impl_block.attrs) {
-			    Flag(flag, priority) => {
+			    Flag(flag, priority, invert) => {
 				let self_type = match impl_block.self_ty.as_ref() { // The `Dummy` in `impl Dummy {}`
 				    Path(path) => path,
 				    _ => continue,
@@ -156,7 +160,11 @@ pub fn watch_files(file_names: Vec<&str>) {
 						sig: format!("method_{}_{}",
 							     self_type,
 							     &method.sig.ident),
-						flag: flag.clone(),
+						flag: if invert {
+						    format!("i_{}", flag)
+						} else {
+						    format!("_{}", flag)
+						},
 						priority,
 					    }),
 					Const(constant) =>
@@ -164,7 +172,11 @@ pub fn watch_files(file_names: Vec<&str>) {
 						sig: format!("implconst_{}_{}",
 							     self_type,
 							     &constant.ident),
-						flag: flag.clone(),
+						flag: if invert {
+						    format!("i_{}", flag)
+						} else {
+						    format!("_{}", flag)
+						},
 						priority,
 					    }),
 					_ => continue,

@@ -1,7 +1,6 @@
 use overrider::*;
 use clap::{Arg, ArgMatches, App};
 
-// clap parsing is up to you
 lazy_static::lazy_static! {
     static ref CLAP_FLAGS: ArgMatches<'static> = {
 	App::new("Overrider example - flag")
@@ -14,12 +13,12 @@ lazy_static::lazy_static! {
 
 #[default]
 fn foo() {
-    println!("Default");
+    println!("This is the old default");
 }
 
 #[override_flag(flag = disable, invert = true)]
 fn foo() {
-    println!("Overriden default");
+    println!("This is the new default, pass --disable to turn off");
 }
 
 fn main() {
