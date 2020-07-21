@@ -6,9 +6,9 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-overrider = {path = "../../overrider"}
+overrider = "^0.7"
 clap = "2.33.1"
 lazy_static = "1.4.0"
 
 [build-dependencies]
-overrider_build = {path = "../../overrider_build"}
+overrider_build = "^0.7"
