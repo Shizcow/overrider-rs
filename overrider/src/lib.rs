@@ -565,9 +565,10 @@ fn attr_inline(attrs: &mut Vec<Attribute>) {
 #[proc_macro_attribute]
 pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream {
     // parse 3 arguements (flag = x [, priority = N] [, invert = (true|false)])
+    // invert is handled in build stage
     let mut flag = None;
     let mut priority = 0;
-    let mut invert = false;
+    let mut _invert = false;
 
     let attrstr = attr.to_string();
     for arg in attrstr.split(",") {
@@ -577,7 +578,7 @@ pub fn override_flag(attr: TokenStream, input: TokenStream) -> TokenStream {
 	match left {
 	    "flag" => flag = Some(right),
 	    "priority" => priority = right.parse().expect(&format!("Invalid arguement '{}'", right)),
-	    "invert" => invert = right.parse().expect(&format!("Invalid arguement '{}'", right)),
+	    "invert" => _invert = right.parse().expect(&format!("Invalid arguement '{}'", right)),
 	    _ => panic!("Invalid arguement '{}'", right),
 	}
     }
