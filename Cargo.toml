@@ -6,7 +6,9 @@ members = [
     "examples/hello_world",
     "examples/methods",
     "examples/priorities",
+    "examples/invert",
     "examples/finals",
     "examples/flags",
-    "examples/library",
+    "examples/library/primary",
+    "examples/library/secondary",
 ]

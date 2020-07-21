@@ -14,6 +14,9 @@ block) can be overriden.
 ### priorities
 An example of how to gracefully handle overriding more than once.
 
+### Invert
+How to make something default, but turned off on a flag.
+
 ### finals
 Say you're working on a large project, with functions and overrides
 spread out over several files. How do you know that the function
